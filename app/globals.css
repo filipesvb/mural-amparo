@@ -1,26 +1,82 @@
 @import "tailwindcss";
 
+@theme {
+  /* Paleta de Cores Cozy/Retro */
+  --color-mural-creme: #f4ede4;
+  --color-mural-green: #d9e4d5;
+  --color-mural-brown: #8b5e3c;
+  --color-mural-dark: #2d2d2d;
+  --color-mural-paper: #f8f6f2;
+
+  /* Utilitário de textura */
+  --background-image-wood: url("https://www.transparenttextures.com/patterns/wood-pattern.png");
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --grid-color: rgba(0, 0, 0, 0.05);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-mural-paper);
+  /* Padrão de papel milimetrado */
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: 20px 20px;
+  color: var(--color-mural-dark);
+  font-family: "Tahoma", "Verdana", sans-serif;
+  margin: 0;
+}
+
+/* Utilitários Customizados */
+@layer components {
+  .retro-border {
+    @apply border-2 border-mural-dark;
+    box-shadow: 2px 2px 0px #2d2d2d;
+  }
+
+  .retro-button-active {
+    @apply transition-transform active:translate-x-[1px] active:translate-y-[1px];
+    &:active {
+      box-shadow: 1px 1px 0px #2d2d2d;
+    }
+  }
+
+  .wood-header-footer {
+    background-image: var(--background-image-wood);
+    @apply bg-mural-brown border-mural-dark;
+  }
+}
+
+/* =========================================
+   Customização da Barra de Rolagem (Scrollbar)
+   ========================================= */
+
+/* Para Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-mural-brown) var(--color-mural-creme);
+}
+
+/* Para Chrome, Edge e Safari */
+::-webkit-scrollbar {
+  width: 8px; /* Deixa a barra fininha */
+  height: 8px; /* Para scroll horizontal, se houver */
+}
+
+/* O "trilho" por onde a barra corre */
+::-webkit-scrollbar-track {
+  background: var(--color-mural-creme);
+  border-left: 1px solid var(--color-mural-dark); /* Linha para separar do feed */
+}
+
+/* O "puxador" da barra */
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-mural-brown);
+  border: 1px solid var(--color-mural-dark); /* Borda dura para manter a vibe retro */
+}
+
+/* Quando passa o mouse por cima do puxador */
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-mural-dark);
 }
