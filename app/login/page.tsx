@@ -19,7 +19,7 @@ export default function LoginPage() {
   return (
     <main className="h-screen p-4 md:p-8 flex justify-center items-center">
       <div className="w-full max-w-md bg-mural-creme retro-border shadow-lg">
-        <header className="bg-mural-brown bg-wood-texture p-3 border-b-2 border-mural-dark flex justify-between items-center text-mural-creme">
+        <header className="wood-header-footer p-3 border-b-2 flex justify-between items-center text-mural-creme">
           <h1 className="font-bold tracking-tight">Acesso ao Mural</h1>
           <Link
             href="/"

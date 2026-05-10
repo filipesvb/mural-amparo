@@ -34,38 +34,6 @@ export async function createPost(formData: FormData) {
   revalidatePath("/");
 }
 
-// Adicione isso no final do seu src/app/actions.ts atual
-
-// export async function signInWithMagicLink(formData: FormData) {
-//   const supabase = await createClient();
-//   const email = formData.get("email") as string;
-
-//   if (!email) return { error: "E-mail é obrigatório" };
-
-//   const { error } = await supabase.auth.signInWithOtp({
-//     email,
-//     options: {
-//       // Para onde o usuário volta após clicar no e-mail
-//       emailRedirectTo: "http://localhost:3000/auth/confirm",
-//     },
-//   });
-
-//   if (error) {
-//     console.error("Erro no login:", error);
-//     return { error: "Não foi possível enviar o link." };
-//   }
-
-//   return { success: true };
-// }
-
-// export async function signOut() {
-//   const supabase = await createClient();
-//   await supabase.auth.signOut();
-//   redirect("/");
-// }
-
-// Adicione/Substitua no seu src/app/actions.ts
-
 export async function authenticate(formData: FormData) {
   const supabase = await createClient();
   const email = formData.get("email") as string;
@@ -116,8 +84,6 @@ export async function signOut() {
   redirect("/");
 }
 
-// Adicione ao final do seu src/app/actions.ts
-
 export async function toggleLike(postId: number) {
   const supabase = await createClient();
   const {
@@ -151,9 +117,18 @@ export async function addComment(formData: FormData) {
 
   const postId = formData.get("post_id");
   const content = formData.get("content") as string;
-  const authorName = user.email?.split("@")[0] || "Morador";
 
   if (!content) return;
+
+  // Mantém consistência com posts: nickname do perfil > prefixo do e-mail > "Morador"
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("nickname")
+    .eq("id", user.id)
+    .single();
+
+  const authorName =
+    profile?.nickname || user.email?.split("@")[0] || "Morador";
 
   await supabase.from("comments").insert({
     post_id: postId,
@@ -164,8 +139,6 @@ export async function addComment(formData: FormData) {
 
   revalidatePath("/");
 }
-
-// Adicione ao src/app/actions.ts
 
 export async function updateProfile(formData: FormData) {
   const supabase = await createClient();

@@ -8,15 +8,11 @@ import RealtimeFeed from "@/components/RealtimeFeed";
 export default async function Home() {
   const supabase = await createClient();
 
-  // 1. Puxamos o usuário logado atualmente (se houver)
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // 2. Extraímos o "apelido" do e-mail (ex: joao@email.com vira "joao")
-  // const apelido = user?.email?.split("@")[0] || "";
-
-  // BUSCA 1: Pegar os posts com Join na tabela de perfis
+  // Posts com join em profiles, likes e comments
   const { data: posts, error } = await supabase
     .from("posts")
     .select(
