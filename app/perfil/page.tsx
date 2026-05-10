@@ -1,79 +1,53 @@
 import { createClient } from "@/utils/supabase/server";
 import { updateProfile } from "@/app/actions";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import ProfileForm from "@/components/ProfileForm";
 
 export default async function PerfilPage() {
   const supabase = await createClient();
+
+  // 1. Verifica se o usuário está logado
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
+  // 2. Busca os dados do perfil atual
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", user?.id)
+    .eq("id", user.id)
     .single();
 
   return (
-    <main className="h-screen p-4 flex justify-center items-center bg-mural-creme">
-      <div className="w-full max-w-md bg-white retro-border shadow-lg overflow-hidden">
-        <header className="wood-header-footer p-3 border-b-2 flex justify-between items-center text-white">
-          <h1 className="font-bold">Configurar Perfil</h1>
+    <main className="h-screen p-4 md:p-8 flex justify-center items-center bg-mural-creme">
+      <div className="w-full max-w-md bg-white retro-border shadow-lg overflow-hidden flex flex-col">
+        {/* Header Retrô */}
+        <header className="wood-header-footer p-4 border-b-2 border-mural-dark flex justify-between items-center text-mural-creme">
+          <h1 className="font-bold tracking-tight">👤 Seu Perfil em Amparo</h1>
           <Link
             href="/"
-            className="text-xs bg-mural-dark px-2 border border-white"
+            className="text-xs bg-mural-dark px-2 py-1 border border-white retro-button-active hover:text-white"
           >
-            [X] Voltar
+            [X] Sair
           </Link>
         </header>
 
-        <form action={updateProfile} className="p-6 space-y-6">
-          <div className="flex flex-col items-center gap-4 py-4 bg-mural-green/20 retro-border">
-            <img
-              src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${profile?.avatar_seed}`}
-              className="w-24 h-24 bg-mural-brown retro-border"
-              alt="Preview do Avatar"
-            />
-            <p className="text-[10px] uppercase font-bold opacity-60">
-              Prévia do seu Avatar
-            </p>
+        <div className="p-6 space-y-6">
+          <div className="bg-mural-green/20 p-3 retro-border text-xs italic text-mural-dark">
+            Aqui você escolhe como os outros moradores te veem no Mural.
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold mb-1">
-                Seu Apelido no Mural:
-              </label>
-              <input
-                name="nickname"
-                defaultValue={profile?.nickname}
-                className="w-full p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none"
-                placeholder="Ex: ZeDaPadaria"
-                required
-              />
-            </div>
+          {/* Chamamos um Client Component para o formulário ter interatividade (preview do avatar) */}
+          <ProfileForm profile={profile} />
+        </div>
 
-            <div>
-              <label className="block text-sm font-bold mb-1">
-                Semente do Avatar (mude o texto para trocar o desenho):
-              </label>
-              <input
-                name="avatar_seed"
-                defaultValue={profile?.avatar_seed}
-                className="w-full p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none"
-                placeholder="Qualquer palavra..."
-                required
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-mural-brown text-white p-3 font-bold retro-border retro-button-active"
-          >
-            Salvar Alterações ✅
-          </button>
-        </form>
+        <footer className="bg-[#eee8de] p-4 border-t-2 border-mural-dark text-center">
+          <p className="text-[10px] opacity-50 font-bold uppercase">
+            Mural Amparo • Edição de Morador
+          </p>
+        </footer>
       </div>
     </main>
   );

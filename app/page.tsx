@@ -14,7 +14,7 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   // 2. Extraímos o "apelido" do e-mail (ex: joao@email.com vira "joao")
-  const apelido = user?.email?.split("@")[0] || "";
+  // const apelido = user?.email?.split("@")[0] || "";
 
   // BUSCA 1: Pegar os posts com Join na tabela de perfis
   const { data: posts, error } = await supabase
@@ -64,7 +64,7 @@ export default async function Home() {
           {user ? (
             <div className="flex items-center gap-4 text-mural-creme">
               <span className="text-sm font-bold hidden md:inline">
-                Olá, <span className="text-yellow-300">{apelido}</span>
+                Olá, <span className="text-yellow-300">{profile.nickname}</span>
               </span>
               <form action={signOut}>
                 <button
@@ -93,21 +93,18 @@ export default async function Home() {
           <aside className="w-full md:w-64 shrink-0 border-r-2 border-mural-dark p-4 space-y-6 bg-[#eee8de] overflow-y-auto hidden md:block">
             {/* ... (Menu Lateral mantido) ... */}
             <nav className="space-y-4 pt-4 flex flex-col">
-              <a
-                href="#"
-                className="flex items-center gap-2 hover:bg-mural-green p-1 transition-colors font-bold"
+              <Link
+                href="/"
+                className="flex items-center gap-2 hover:bg-mural-green p-1 transition-colors"
               >
                 📰 Feed Público
-              </a>
-              {/* Mostra "Meu Perfil" apenas se estiver logado */}
-              {user && (
-                <a
-                  href="#"
-                  className="flex items-center gap-2 hover:bg-mural-green p-1 transition-colors font-bold"
-                >
-                  👤 Meu Perfil
-                </a>
-              )}
+              </Link>
+              <Link
+                href="/perfil"
+                className="flex items-center gap-2 hover:bg-mural-green p-1 transition-colors"
+              >
+                👤 Seu Perfil
+              </Link>
               <a
                 href="#"
                 className="flex items-center gap-2 hover:bg-mural-green p-1 transition-colors font-bold"
