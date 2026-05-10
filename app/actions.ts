@@ -73,36 +73,30 @@ export async function authenticate(formData: FormData) {
 
   if (!email || !password) return { error: "E-mail e senha são obrigatórios" };
 
-  // 1. Tenta entrar com as credenciais fornecidas
-  const { error: signInError } = await supabase.auth.signInWithPassword({
+  // Tentamos cadastrar primeiro. Se o e-mail já existe, o Supabase devolve
+  // "User already registered" e aí sim tentamos o login.
+  // Mensagens são genéricas no caminho de erro para evitar enumeração de contas
+  // (não revelar se um e-mail está ou não cadastrado).
+  const { error: signUpError } = await supabase.auth.signUp({
     email,
     password,
   });
 
-  // 2. Se o login falhou, precisamos descobrir o porquê
-  if (signInError) {
-    // Se o erro for "Invalid login credentials", tentamos o cadastro automático
-    if (signInError.message.includes("Invalid login credentials")) {
-      const { error: signUpError } = await supabase.auth.signUp({
+  if (signUpError) {
+    if (signUpError.message.includes("User already registered")) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
-      // Se o cadastro também falhar porque o usuário já existe,
-      // significa que a senha do passo 1 estava incorreta.
-      if (signUpError?.message.includes("User already registered")) {
-        return {
-          error: "Este e-mail já está cadastrado. Verifique sua senha.",
-        };
+      if (signInError) {
+        return { error: "E-mail ou senha incorretos." };
       }
-
-      if (signUpError) return { error: signUpError.message };
     } else {
-      return { error: signInError.message };
+      return { error: signUpError.message };
     }
   }
 
-  // 3. Se chegou aqui, logou ou cadastrou com sucesso
+  // Logou ou cadastrou com sucesso
   revalidatePath("/");
   redirect("/");
 }

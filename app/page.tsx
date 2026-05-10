@@ -64,7 +64,10 @@ export default async function Home() {
           {user ? (
             <div className="flex items-center gap-4 text-mural-creme">
               <span className="text-sm font-bold hidden md:inline">
-                Olá, <span className="text-yellow-300">{profile.nickname}</span>
+                Olá,{" "}
+                <span className="text-yellow-300">
+                  {profile?.nickname ?? user.email?.split("@")[0]}
+                </span>
               </span>
               <form action={signOut}>
                 <button

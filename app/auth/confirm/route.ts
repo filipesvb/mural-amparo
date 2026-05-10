@@ -5,7 +5,16 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   // Agora buscamos o parâmetro 'code' em vez de 'token_hash'
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+
+  // Aceita apenas paths internos para evitar open redirect
+  // (rejeita "//attacker.com", "/\\evil", URLs absolutas, etc.)
+  const rawNext = searchParams.get("next") ?? "/";
+  const next =
+    rawNext.startsWith("/") &&
+    !rawNext.startsWith("//") &&
+    !rawNext.startsWith("/\\")
+      ? rawNext
+      : "/";
 
   if (code) {
     const supabase = await createClient();
