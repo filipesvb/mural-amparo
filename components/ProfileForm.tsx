@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { updateProfile } from "@/app/actions";
+import type { Profile } from "@/utils/types";
 
-export default function ProfileForm({ profile }: { profile: any }) {
+export default function ProfileForm({ profile }: { profile: Profile | null }) {
   const [nickname, setNickname] = useState(profile?.nickname || "");
   const [seed, setSeed] = useState(profile?.avatar_seed || "");
   const [isPending, startTransition] = useTransition();

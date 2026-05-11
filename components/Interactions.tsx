@@ -1,7 +1,8 @@
 "use client";
 
 import { toggleLike, addComment } from "@/app/actions";
-import { useState, useTransition } from "react"; // Adicionado useTransition
+import { useState, useTransition } from "react";
+import type { Comment } from "@/utils/types";
 
 export function PostInteractions({
   postId,
@@ -12,7 +13,7 @@ export function PostInteractions({
 }: {
   postId: number;
   likesCount: number;
-  comments: any[];
+  comments: Comment[];
   isLiked: boolean;
   isLoggedIn: boolean;
 }) {

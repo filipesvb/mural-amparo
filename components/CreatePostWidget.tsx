@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { createPost } from "@/app/actions";
-import { User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
+import type { Profile } from "@/utils/types";
 
 export default function CreatePostWidget({
   user,
   profile,
 }: {
-  user: any;
-  profile: any;
+  user: User | null;
+  profile: Profile | null;
 }) {
   const [isOpen, setIsOpen] = useState(false);
 

@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
+import type { PostWithRelations } from "@/utils/types";
 import { PostInteractions } from "./Interactions";
 
 export default function RealtimeFeed({
   initialPosts,
   user,
 }: {
-  initialPosts: any[];
-  user: any;
+  initialPosts: PostWithRelations[];
+  user: User | null;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const supabase = createClient();
@@ -46,8 +48,10 @@ export default function RealtimeFeed({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "likes" },
-        async (payload: any) => {
-          const targetId = payload.new?.post_id || payload.old?.post_id;
+        async (payload) => {
+          const newRow = payload.new as Partial<{ post_id: number }>;
+          const oldRow = payload.old as Partial<{ post_id: number }>;
+          const targetId = newRow.post_id ?? oldRow.post_id;
           if (targetId) {
             const updatedPost = await fetchSinglePost(targetId);
             if (updatedPost) {
@@ -61,8 +65,10 @@ export default function RealtimeFeed({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "comments" },
-        async (payload: any) => {
-          const targetId = payload.new?.post_id || payload.old?.post_id;
+        async (payload) => {
+          const newRow = payload.new as Partial<{ post_id: number }>;
+          const oldRow = payload.old as Partial<{ post_id: number }>;
+          const targetId = newRow.post_id ?? oldRow.post_id;
           if (targetId) {
             const updatedPost = await fetchSinglePost(targetId);
             if (updatedPost) {
@@ -84,7 +90,7 @@ export default function RealtimeFeed({
     <div className="space-y-4">
       {posts.map((post, index) => {
         const isLiked = post.likes?.some(
-          (like: any) => like.user_id === user?.id,
+          (like) => like.user_id === user?.id,
         );
 
         return (
