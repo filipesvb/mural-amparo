@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type { PostWithRelations } from "@/utils/types";
@@ -103,9 +104,11 @@ export default function RealtimeFeed({
               <div className="flex gap-2 items-center">
                 {/* Estilo do Avatar original */}
                 <div className="w-10 h-10 bg-mural-brown retro-border overflow-hidden">
-                  <img
-                    src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${post.profiles?.avatar_seed || post.author_name}`}
+                  <Image
+                    src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${post.profiles?.avatar_seed || post.author_name}`}
                     alt="avatar"
+                    width={40}
+                    height={40}
                   />
                 </div>
                 <div>

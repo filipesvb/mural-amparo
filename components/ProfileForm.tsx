@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { updateProfile } from "@/app/actions";
 import type { Profile } from "@/utils/types";
 
@@ -25,10 +26,11 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
       {/* Preview Dinâmico do Avatar */}
       <div className="flex flex-col items-center justify-center p-4 bg-white retro-border border-dashed">
         <div className="w-24 h-24 bg-mural-brown retro-border overflow-hidden mb-2">
-          <img
-            src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${seed}`}
+          <Image
+            src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${seed}`}
             alt="Preview do Avatar"
-            className="w-full h-full"
+            width={96}
+            height={96}
           />
         </div>
         <p className="text-[10px] font-bold text-mural-brown uppercase">
