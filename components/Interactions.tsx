@@ -18,8 +18,9 @@ export function PostInteractions({
   isLoggedIn: boolean;
 }) {
   const [showComments, setShowComments] = useState(false);
+  const [commentError, setCommentError] = useState("");
 
-  // O hook useTransition gerencia o estado de carregamento da Action
+  // useTransition gerencia o estado de carregamento da Action
   const [isLikePending, startLikeTransition] = useTransition();
 
   return (
@@ -67,17 +68,32 @@ export function PostInteractions({
           ))}
 
           {isLoggedIn ? (
-            <form action={addComment} className="flex gap-2 mt-2">
-              <input type="hidden" name="post_id" value={postId} />
-              <input
-                name="content"
-                placeholder="Escreva um comentário..."
-                className="flex-1 p-1 text-[10px] bg-white border border-mural-dark focus:outline-none"
-              />
-              <button className="bg-mural-dark text-white px-2 py-1 text-[10px] font-bold">
-                Enviar
-              </button>
-            </form>
+            <>
+              <form
+                action={async (formData) => {
+                  setCommentError("");
+                  const result = await addComment(formData);
+                  if (result?.error) setCommentError(result.error);
+                }}
+                className="flex gap-2 mt-2"
+              >
+                <input type="hidden" name="post_id" value={postId} />
+                <input
+                  name="content"
+                  required
+                  placeholder="Escreva um comentário..."
+                  className="flex-1 p-1 text-[10px] bg-white border border-mural-dark focus:outline-none"
+                />
+                <button className="bg-mural-dark text-white px-2 py-1 text-[10px] font-bold">
+                  Enviar
+                </button>
+              </form>
+              {commentError && (
+                <p className="text-[10px] text-red-700 italic mt-1">
+                  ⚠️ {commentError}
+                </p>
+              )}
+            </>
           ) : (
             <p className="text-[10px] italic opacity-50 text-center">
               Faça login para comentar.

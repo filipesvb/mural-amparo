@@ -7,28 +7,27 @@ import { redirect } from "next/navigation";
 export async function createPost(formData: FormData) {
   const supabase = await createClient();
 
-  // Pegamos o usuário logado para salvar o ID dele no post
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { error: "Você precisa estar logado para postar." };
 
   const content = formData.get("content") as string;
   const author_name = formData.get("author_name") as string; // Mantemos por segurança/legado
 
-  if (!content) return;
+  if (!content) return { error: "O recado não pode estar vazio." };
 
   const { error } = await supabase.from("posts").insert([
     {
       content,
       author_name,
-      user_id: user.id, // O elo que faltava!
+      user_id: user.id,
     },
   ]);
 
   if (error) {
     console.error("Erro ao postar:", error);
-    return;
+    return { error: "Não foi possível publicar o recado." };
   }
 
   revalidatePath("/");
@@ -113,12 +112,12 @@ export async function addComment(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { error: "Você precisa estar logado para comentar." };
 
   const postId = formData.get("post_id");
   const content = formData.get("content") as string;
 
-  if (!content) return;
+  if (!content) return { error: "O comentário não pode estar vazio." };
 
   // Mantém consistência com posts: nickname do perfil > prefixo do e-mail > "Morador"
   const { data: profile } = await supabase
@@ -130,12 +129,17 @@ export async function addComment(formData: FormData) {
   const authorName =
     profile?.nickname || user.email?.split("@")[0] || "Morador";
 
-  await supabase.from("comments").insert({
+  const { error } = await supabase.from("comments").insert({
     post_id: postId,
     user_id: user.id,
     content,
     author_name: authorName,
   });
+
+  if (error) {
+    console.error("Erro ao comentar:", error);
+    return { error: "Não foi possível enviar o comentário." };
+  }
 
   revalidatePath("/");
 }

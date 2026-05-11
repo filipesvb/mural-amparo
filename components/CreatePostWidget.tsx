@@ -13,6 +13,7 @@ export default function CreatePostWidget({
   profile: Profile | null;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState("");
 
   // Se o morador não estiver logado, o botão leva para o login
   if (!user) {
@@ -50,7 +51,12 @@ export default function CreatePostWidget({
   return (
     <form
       action={async (formData) => {
-        await createPost(formData);
+        setError("");
+        const result = await createPost(formData);
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
         setIsOpen(false);
       }}
       className="bg-white p-4 retro-border mb-6 relative shadow-md"
@@ -69,7 +75,11 @@ export default function CreatePostWidget({
       </div>
 
       <div className="space-y-3">
-        {/* Campo oculto com o nome do autor vindo do login */}
+        {error && (
+          <div className="bg-red-100 border-2 border-red-800 p-2 text-red-800 text-xs font-bold">
+            ⚠️ {error}
+          </div>
+        )}
         <input
           type="hidden"
           name="author_name"
