@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
-import type { PostWithRelations } from "@/utils/types";
+import type { Comment, Post, PostWithRelations } from "@/utils/types";
 import { PostInteractions } from "./Interactions";
 
 export default function RealtimeFeed({
@@ -17,69 +17,71 @@ export default function RealtimeFeed({
   const [posts, setPosts] = useState(initialPosts);
   const supabase = createClient();
 
-  // Função para buscar dados completos de um post (incluindo o perfil para o estilo não quebrar)
-  const fetchSinglePost = async (postId: number) => {
-    const { data } = await supabase
-      .from("posts")
-      .select(
-        "*, profiles (nickname, avatar_seed), likes (user_id), comments (*)",
-      )
-      .eq("id", postId)
-      .single();
-    return data;
-  };
-
   useEffect(() => {
     const channel = supabase
       .channel("mural_realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "posts" },
+        { event: "INSERT", schema: "public", table: "posts" },
         async (payload) => {
-          if (payload.eventType === "INSERT") {
-            const newPost = await fetchSinglePost(payload.new.id);
-            if (newPost) setPosts((prev) => [newPost, ...prev]);
-          } else if (payload.eventType === "DELETE") {
+          const newPost = payload.new as Post;
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("nickname, avatar_seed")
+            .eq("id", newPost.user_id)
+            .single();
+          setPosts((prev) => [
+            { ...newPost, profiles: profile, likes: [], comments: [] },
+            ...prev,
+          ]);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "posts" },
+        (payload) => {
+          const oldRow = payload.old as Partial<{ id: number }>;
+          if (oldRow.id) {
             setPosts((prev) =>
-              prev.filter((post) => post.id !== payload.old.id),
+              prev.filter((post) => post.id !== oldRow.id),
             );
           }
         },
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "likes" },
-        async (payload) => {
-          const newRow = payload.new as Partial<{ post_id: number }>;
-          const oldRow = payload.old as Partial<{ post_id: number }>;
-          const targetId = newRow.post_id ?? oldRow.post_id;
-          if (targetId) {
-            const updatedPost = await fetchSinglePost(targetId);
-            if (updatedPost) {
-              setPosts((prev) =>
-                prev.map((p) => (p.id === targetId ? updatedPost : p)),
-              );
-            }
-          }
+        { event: "INSERT", schema: "public", table: "likes" },
+        (payload) => {
+          const newLike = payload.new as { post_id: number; user_id: string };
+          setPosts((prev) =>
+            prev.map((post) =>
+              post.id === newLike.post_id
+                ? {
+                    ...post,
+                    likes: [...post.likes, { user_id: newLike.user_id }],
+                  }
+                : post,
+            ),
+          );
         },
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "comments" },
-        async (payload) => {
-          const newRow = payload.new as Partial<{ post_id: number }>;
-          const oldRow = payload.old as Partial<{ post_id: number }>;
-          const targetId = newRow.post_id ?? oldRow.post_id;
-          if (targetId) {
-            const updatedPost = await fetchSinglePost(targetId);
-            if (updatedPost) {
-              setPosts((prev) =>
-                prev.map((p) => (p.id === targetId ? updatedPost : p)),
-              );
-            }
-          }
+        { event: "INSERT", schema: "public", table: "comments" },
+        (payload) => {
+          const newComment = payload.new as Comment;
+          setPosts((prev) =>
+            prev.map((post) =>
+              post.id === newComment.post_id
+                ? { ...post, comments: [...post.comments, newComment] }
+                : post,
+            ),
+          );
         },
       )
+      // DELETE em likes/comments não dispara update local: o payload.old
+      // só carrega o primary key sem REPLICA IDENTITY FULL no Postgres.
+      // Esses eventos só refletem após reload.
       .subscribe();
 
     return () => {
