@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Se chegou aqui, não tinha código ou deu erro na troca
-  return NextResponse.redirect(
-    `${origin}/login?error=Link invalido ou expirado`,
-  );
+  const loginUrl = new URL("/login", origin);
+  loginUrl.searchParams.set("error", "Link inválido ou expirado");
+  return NextResponse.redirect(loginUrl);
 }

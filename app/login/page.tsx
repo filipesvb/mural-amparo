@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { authenticate } from "@/app/actions";
 import Link from "next/link";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState(
+    searchParams.get("error") ?? "",
+  );
 
   async function handleAction(formData: FormData) {
     setIsLoading(true);
