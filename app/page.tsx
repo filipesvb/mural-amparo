@@ -89,7 +89,7 @@ export default async function Home() {
         </div>
 
         <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
-          <aside className="w-full md:w-64 shrink-0 border-r-2 border-mural-dark p-4 space-y-6 bg-[#eee8de] overflow-y-auto hidden md:block">
+          <aside className="w-full md:w-64 shrink-0 border-r-2 border-mural-dark p-4 space-y-6 bg-mural-panel overflow-y-auto hidden md:block">
             {/* ... (Menu Lateral mantido) ... */}
             <nav className="space-y-4 pt-4 flex flex-col">
               <Link
@@ -134,7 +134,7 @@ export default async function Home() {
             )}
           </section>
 
-          <aside className="w-full md:w-72 shrink-0 p-4 space-y-4 bg-[#eee8de] border-l-2 border-mural-dark overflow-y-auto hidden md:block">
+          <aside className="w-full md:w-72 shrink-0 p-4 space-y-4 bg-mural-panel border-l-2 border-mural-dark overflow-y-auto hidden md:block">
             {/* ... (Widgets Direita mantidos) ... */}
             <div className="bg-[#4a5d4e] text-mural-creme p-3 retro-border">
               <h3 className="font-bold border-b border-mural-creme mb-2">

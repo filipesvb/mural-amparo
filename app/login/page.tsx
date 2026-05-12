@@ -31,7 +31,7 @@ export default function LoginPage() {
 
         <div className="p-6">
           <form action={handleAction} className="space-y-4">
-            <div className="bg-[#eee8de] p-3 retro-border text-xs mb-4 italic text-mural-dark">
+            <div className="bg-mural-panel p-3 retro-border text-xs mb-4 italic text-mural-dark">
               Dica: Se você não tiver conta, ela será criada automaticamente ao
               "Entrar".
             </div>

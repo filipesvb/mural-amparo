@@ -1,5 +1,4 @@
 import { createClient } from "@/utils/supabase/server";
-import { updateProfile } from "@/app/actions";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import ProfileForm from "@/components/ProfileForm";
@@ -43,7 +42,7 @@ export default async function PerfilPage() {
           <ProfileForm profile={profile} />
         </div>
 
-        <footer className="bg-[#eee8de] p-4 border-t-2 border-mural-dark text-center">
+        <footer className="bg-mural-panel p-4 border-t-2 border-mural-dark text-center">
           <p className="text-[10px] opacity-50 font-bold uppercase">
             Mural Amparo • Edição de Morador
           </p>
