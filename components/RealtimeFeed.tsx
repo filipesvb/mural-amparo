@@ -107,7 +107,7 @@ export default function RealtimeFeed({
                 {/* Estilo do Avatar original */}
                 <div className="w-10 h-10 bg-mural-brown retro-border overflow-hidden">
                   <Image
-                    src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${post.profiles?.avatar_seed || post.author_name}`}
+                    src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent((post.profiles?.avatar_seed || post.author_name).trim())}`}
                     alt="avatar"
                     width={40}
                     height={40}

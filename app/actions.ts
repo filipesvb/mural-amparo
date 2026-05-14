@@ -3,6 +3,8 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { credentialsSchema } from "@/utils/validation";
 
 export async function createPost(formData: FormData) {
   const supabase = await createClient();
@@ -34,36 +36,62 @@ export async function createPost(formData: FormData) {
 }
 
 export async function authenticate(formData: FormData) {
+  const parsed = credentialsSchema.safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const { email, password } = parsed.data;
+
   const supabase = await createClient();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
 
-  if (!email || !password) return { error: "E-mail e senha são obrigatórios" };
+  // Monta o origin para o link de confirmação por e-mail
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  const emailRedirectTo = `${proto}://${host}/auth/confirm`;
 
-  // Tentamos cadastrar primeiro. Se o e-mail já existe, o Supabase devolve
-  // "User already registered" e aí sim tentamos o login.
-  // Mensagens são genéricas no caminho de erro para evitar enumeração de contas
-  // (não revelar se um e-mail está ou não cadastrado).
-  const { error: signUpError } = await supabase.auth.signUp({
+  // Tenta login primeiro. O Supabase moderno, por proteção anti-enumeração, não
+  // retorna mais "User already registered" no signUp de contas confirmadas —
+  // então signUp-primeiro mandaria e-mail à toa pra quem só quer entrar.
+  const { error: signInError } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
-
-  if (signUpError) {
-    if (signUpError.message.includes("User already registered")) {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (signInError) {
-        return { error: "E-mail ou senha incorretos." };
-      }
-    } else {
-      return { error: signUpError.message };
-    }
+  if (!signInError) {
+    revalidatePath("/");
+    redirect("/");
+  }
+  if (signInError.message.toLowerCase().includes("email not confirmed")) {
+    return {
+      error:
+        "Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada.",
+    };
   }
 
-  // Logou ou cadastrou com sucesso
+  // Login falhou com credenciais inválidas: pode ser conta inexistente (cadastrar)
+  // OU senha errada (já existe). signUp diferencia via identities vazias.
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo },
+  });
+  if (signUpError) {
+    return { error: "E-mail ou senha incorretos." };
+  }
+  // Anti-enumeração: identities vazias = conta já existe → era senha errada.
+  if (signUpData.user && signUpData.user.identities?.length === 0) {
+    return { error: "E-mail ou senha incorretos." };
+  }
+  if (!signUpData.session) {
+    return {
+      info: "Enviamos um link de confirmação para seu e-mail. Clique nele para entrar no Mural.",
+    };
+  }
+
+  // Conta criada com sessão imediata (caso confirmação esteja desligada no Supabase)
   revalidatePath("/");
   redirect("/");
 }
@@ -151,8 +179,8 @@ export async function updateProfile(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Não autorizado" };
 
-  const nickname = formData.get("nickname") as string;
-  const avatar_seed = formData.get("avatar_seed") as string;
+  const nickname = (formData.get("nickname") as string).trim();
+  const avatar_seed = (formData.get("avatar_seed") as string).trim();
 
   const { error } = await supabase
     .from("profiles")

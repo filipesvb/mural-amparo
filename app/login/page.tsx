@@ -11,12 +11,15 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState(
     searchParams.get("error") ?? "",
   );
+  const [infoMessage, setInfoMessage] = useState("");
 
   async function handleAction(formData: FormData) {
     setIsLoading(true);
     setErrorMessage("");
+    setInfoMessage("");
     const result = await authenticate(formData);
     if (result?.error) setErrorMessage(result.error);
+    if (result?.info) setInfoMessage(result.info);
     setIsLoading(false);
   }
 
@@ -36,13 +39,19 @@ export default function LoginPage() {
         <div className="p-6">
           <form action={handleAction} className="space-y-4">
             <div className="bg-mural-panel p-3 retro-border text-xs mb-4 italic text-mural-dark">
-              Dica: Se você não tiver conta, ela será criada automaticamente ao
-              "Entrar".
+              Dica: Se você não tiver conta, criaremos uma e enviaremos um link
+              de confirmação por e-mail.
             </div>
 
             {errorMessage && (
               <div className="bg-red-100 border-2 border-red-800 p-3 text-red-800 text-sm retro-border font-bold">
                 ⚠️ {errorMessage}
+              </div>
+            )}
+
+            {infoMessage && (
+              <div className="bg-green-100 border-2 border-green-800 p-3 text-green-800 text-sm retro-border font-bold">
+                ✉️ {infoMessage}
               </div>
             )}
 

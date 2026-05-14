@@ -39,7 +39,7 @@ export default function CreatePostWidget({
         className="w-full bg-mural-creme text-mural-dark p-4 retro-border font-bold flex items-center justify-between gap-2 retro-button-active mb-6 hover:bg-white transition-colors"
       >
         <span className="text-gray-500 font-normal italic">
-          O que está acontecendo, {user.email?.split("@")[0]}?
+          O que está acontecendo, {profile?.nickname}?
         </span>
         <div className="bg-mural-brown text-white px-4 py-1 retro-border text-sm">
           ➕ Escrever

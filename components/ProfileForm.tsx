@@ -27,7 +27,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
       <div className="flex flex-col items-center justify-center p-4 bg-white retro-border border-dashed">
         <div className="w-24 h-24 bg-mural-brown retro-border overflow-hidden mb-2">
           <Image
-            src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${seed}`}
+            src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent(seed.trim())}`}
             alt="Preview do Avatar"
             width={96}
             height={96}
