@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { credentialsSchema } from "@/utils/validation";
 import type { PostWithRelations } from "@/utils/types";
-import { FEED_PAGE_SIZE } from "@/utils/feed";
+import { FEED_PAGE_SIZE, EDIT_WINDOW_MS } from "@/utils/feed";
 
 export async function loadMorePosts(
   beforeCreatedAt: string,
@@ -157,6 +157,129 @@ export async function toggleLike(postId: number) {
     await supabase.from("likes").delete().eq("id", existingLike.id);
   } else {
     await supabase.from("likes").insert({ post_id: postId, user_id: user.id });
+  }
+
+  revalidatePath("/");
+}
+
+export async function editPost(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  const postId = Number(formData.get("post_id"));
+  const content = (formData.get("content") as string)?.trim();
+  if (!postId) return { error: "Recado inválido." };
+  if (!content) return { error: "O recado não pode estar vazio." };
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id, created_at")
+    .eq("id", postId)
+    .single();
+  if (!post) return { error: "Recado não encontrado." };
+  if (post.user_id !== user.id)
+    return { error: "Você não pode editar este recado." };
+  if (Date.now() - new Date(post.created_at).getTime() > EDIT_WINDOW_MS)
+    return { error: "Janela de edição expirou (5 minutos)." };
+
+  const { error } = await supabase
+    .from("posts")
+    .update({ content })
+    .eq("id", postId);
+  if (error) {
+    console.error("Erro ao editar recado:", error);
+    return { error: "Não foi possível salvar a edição." };
+  }
+
+  revalidatePath("/");
+}
+
+export async function deletePost(postId: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("user_id")
+    .eq("id", postId)
+    .single();
+  if (!post) return { error: "Recado não encontrado." };
+  if (post.user_id !== user.id)
+    return { error: "Você não pode excluir este recado." };
+
+  const { error } = await supabase.from("posts").delete().eq("id", postId);
+  if (error) {
+    console.error("Erro ao excluir recado:", error);
+    return { error: "Não foi possível excluir o recado." };
+  }
+
+  revalidatePath("/");
+}
+
+export async function editComment(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  const commentId = Number(formData.get("comment_id"));
+  const content = (formData.get("content") as string)?.trim();
+  if (!commentId) return { error: "Comentário inválido." };
+  if (!content) return { error: "O comentário não pode estar vazio." };
+
+  const { data: comment } = await supabase
+    .from("comments")
+    .select("user_id, created_at")
+    .eq("id", commentId)
+    .single();
+  if (!comment) return { error: "Comentário não encontrado." };
+  if (comment.user_id !== user.id)
+    return { error: "Você não pode editar este comentário." };
+  if (Date.now() - new Date(comment.created_at).getTime() > EDIT_WINDOW_MS)
+    return { error: "Janela de edição expirou (5 minutos)." };
+
+  const { error } = await supabase
+    .from("comments")
+    .update({ content })
+    .eq("id", commentId);
+  if (error) {
+    console.error("Erro ao editar comentário:", error);
+    return { error: "Não foi possível salvar a edição." };
+  }
+
+  revalidatePath("/");
+}
+
+export async function deleteComment(commentId: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  const { data: comment } = await supabase
+    .from("comments")
+    .select("user_id")
+    .eq("id", commentId)
+    .single();
+  if (!comment) return { error: "Comentário não encontrado." };
+  if (comment.user_id !== user.id)
+    return { error: "Você não pode excluir este comentário." };
+
+  const { error } = await supabase
+    .from("comments")
+    .delete()
+    .eq("id", commentId);
+  if (error) {
+    console.error("Erro ao excluir comentário:", error);
+    return { error: "Não foi possível excluir o comentário." };
   }
 
   revalidatePath("/");

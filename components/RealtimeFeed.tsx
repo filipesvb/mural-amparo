@@ -85,15 +85,65 @@ export default function RealtimeFeed({
           );
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "posts" },
+        (payload) => {
+          const updated = payload.new as Post;
+          setPosts((prev) =>
+            prev.map((post) =>
+              post.id === updated.id
+                ? { ...post, content: updated.content }
+                : post,
+            ),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "comments" },
+        (payload) => {
+          const updated = payload.new as Comment;
+          setPosts((prev) =>
+            prev.map((post) =>
+              post.id === updated.post_id
+                ? {
+                    ...post,
+                    comments: post.comments.map((c) =>
+                      c.id === updated.id ? updated : c,
+                    ),
+                  }
+                : post,
+            ),
+          );
+        },
+      )
       // DELETE em likes/comments não dispara update local: o payload.old
       // só carrega o primary key sem REPLICA IDENTITY FULL no Postgres.
-      // Esses eventos só refletem após reload.
+      // Para comments, o cliente que apaga atualiza o estado local via callback
+      // (onCommentDeleted). Outros clientes só veem após reload.
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [supabase]);
+
+  const handleCommentDeleted = useCallback(
+    (postId: number, commentId: number) => {
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                comments: post.comments.filter((c) => c.id !== commentId),
+              }
+            : post,
+        ),
+      );
+    },
+    [],
+  );
 
   const fetchMore = useCallback(async () => {
     if (isLoading || !hasMore || posts.length === 0) return;
@@ -128,6 +178,7 @@ export default function RealtimeFeed({
           post={post}
           user={user}
           bgClass={index % 2 === 0 ? "bg-white" : "bg-mural-green"}
+          onCommentDeleted={handleCommentDeleted}
         />
       ))}
 
