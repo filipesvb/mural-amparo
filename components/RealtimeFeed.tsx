@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type { Comment, Post, PostWithRelations } from "@/utils/types";
-import { PostInteractions } from "./Interactions";
+import PostCard from "./PostCard";
 
 export default function RealtimeFeed({
   initialPosts,
@@ -91,58 +90,14 @@ export default function RealtimeFeed({
 
   return (
     <div className="space-y-4">
-      {posts.map((post, index) => {
-        const isLiked = post.likes?.some(
-          (like) => like.user_id === user?.id,
-        );
-
-        return (
-          /* AQUI: Roubamos o estilo exato do seu código antigo */
-          <article
-            key={post.id}
-            className={`p-4 retro-border ${index % 2 === 0 ? "bg-white" : "bg-mural-green"}`}
-          >
-            <div className="flex justify-between items-start mb-2">
-              <div className="flex gap-2 items-center">
-                {/* Estilo do Avatar original */}
-                <div className="w-10 h-10 bg-mural-brown retro-border overflow-hidden">
-                  <Image
-                    src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent((post.profiles?.avatar_seed || post.author_name).trim())}`}
-                    alt="avatar"
-                    width={40}
-                    height={40}
-                  />
-                </div>
-                <div>
-                  {/* Nome e Data com as fontes e cores originais */}
-                  <p className="font-bold">
-                    {post.profiles?.nickname || post.author_name}
-                  </p>
-                  <p className="text-[10px] opacity-60">
-                    {new Date(post.created_at).toLocaleDateString("pt-BR")} às{" "}
-                    {new Date(post.created_at).toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Texto do recado com o leading-relaxed original */}
-            <p className="text-sm leading-relaxed mb-4">{post.content}</p>
-
-            {/* Mantemos as interações integradas ao estilo */}
-            <PostInteractions
-              postId={post.id}
-              likesCount={post.likes?.length || 0}
-              comments={post.comments || []}
-              isLiked={isLiked}
-              isLoggedIn={!!user}
-            />
-          </article>
-        );
-      })}
+      {posts.map((post, index) => (
+        <PostCard
+          key={post.id}
+          post={post}
+          user={user}
+          bgClass={index % 2 === 0 ? "bg-white" : "bg-mural-green"}
+        />
+      ))}
     </div>
   );
 }

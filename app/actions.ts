@@ -199,5 +199,5 @@ export async function updateProfile(formData: FormData) {
   }
 
   revalidatePath("/");
-  redirect("/");
+  redirect(`/perfil/${encodeURIComponent(nickname)}`);
 }
