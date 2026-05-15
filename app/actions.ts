@@ -5,6 +5,33 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { credentialsSchema } from "@/utils/validation";
+import type { PostWithRelations } from "@/utils/types";
+import { FEED_PAGE_SIZE } from "@/utils/feed";
+
+export async function loadMorePosts(
+  beforeCreatedAt: string,
+): Promise<PostWithRelations[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("posts")
+    .select(
+      `
+      *,
+      profiles (nickname, avatar_seed),
+      likes (user_id),
+      comments (*)
+    `,
+    )
+    .lt("created_at", beforeCreatedAt)
+    .order("created_at", { ascending: false })
+    .limit(FEED_PAGE_SIZE);
+
+  if (error) {
+    console.error("Erro ao carregar mais posts:", error);
+    return [];
+  }
+  return (data ?? []) as PostWithRelations[];
+}
 
 export async function createPost(formData: FormData) {
   const supabase = await createClient();

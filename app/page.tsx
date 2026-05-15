@@ -2,6 +2,7 @@ import CreatePostWidget from "@/components/CreatePostWidget";
 import { createClient } from "@/utils/supabase/server";
 import Link from "next/link";
 import { signOut } from "@/app/actions";
+import { FEED_PAGE_SIZE } from "@/utils/feed";
 import RealtimeFeed from "@/components/RealtimeFeed";
 
 export default async function Home() {
@@ -21,7 +22,8 @@ export default async function Home() {
       comments (*)
     `,
     )
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(FEED_PAGE_SIZE);
 
   if (error) {
     console.error("Falha ao buscar posts:", error);

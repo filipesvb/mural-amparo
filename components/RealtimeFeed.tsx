@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type { Comment, Post, PostWithRelations } from "@/utils/types";
+import { FEED_PAGE_SIZE } from "@/utils/feed";
+import { loadMorePosts } from "@/app/actions";
 import PostCard from "./PostCard";
 
 export default function RealtimeFeed({
@@ -14,6 +16,11 @@ export default function RealtimeFeed({
   user: User | null;
 }) {
   const [posts, setPosts] = useState(initialPosts);
+  const [hasMore, setHasMore] = useState(
+    initialPosts.length === FEED_PAGE_SIZE,
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -88,6 +95,31 @@ export default function RealtimeFeed({
     };
   }, [supabase]);
 
+  const fetchMore = useCallback(async () => {
+    if (isLoading || !hasMore || posts.length === 0) return;
+    setIsLoading(true);
+    const cursor = posts[posts.length - 1].created_at;
+    const next = await loadMorePosts(cursor);
+    setPosts((prev) => [...prev, ...next]);
+    if (next.length < FEED_PAGE_SIZE) setHasMore(false);
+    setIsLoading(false);
+  }, [isLoading, hasMore, posts]);
+
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) fetchMore();
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, fetchMore]);
+
   return (
     <div className="space-y-4">
       {posts.map((post, index) => (
@@ -98,6 +130,31 @@ export default function RealtimeFeed({
           bgClass={index % 2 === 0 ? "bg-white" : "bg-mural-green"}
         />
       ))}
+
+      {hasMore && (
+        <div
+          ref={sentinelRef}
+          className="flex items-center justify-center gap-2 p-4 text-xs italic opacity-60"
+        >
+          {isLoading ? (
+            <>
+              <span
+                aria-hidden
+                className="w-3 h-3 border-2 border-mural-dark border-t-transparent rounded-full animate-spin"
+              />
+              Carregando mais recados...
+            </>
+          ) : (
+            "..."
+          )}
+        </div>
+      )}
+
+      {!hasMore && posts.length >= FEED_PAGE_SIZE && (
+        <div className="text-center p-4 text-xs italic opacity-40">
+          🌳 Fim do mural por enquanto.
+        </div>
+      )}
     </div>
   );
 }
