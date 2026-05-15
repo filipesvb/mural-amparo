@@ -3,7 +3,9 @@ import { createClient } from "@/utils/supabase/server";
 import Link from "next/link";
 import { signOut } from "@/app/actions";
 import { FEED_PAGE_SIZE } from "@/utils/feed";
+import { fetchInitialNotifications } from "@/utils/notifications";
 import RealtimeFeed from "@/components/RealtimeFeed";
+import NotificationBell from "@/components/NotificationBell";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -35,6 +37,10 @@ export default async function Home() {
     .eq("id", user?.id)
     .single();
 
+  const { notifications: initialNotifications, unreadCount } = user
+    ? await fetchInitialNotifications(user.id)
+    : { notifications: [], unreadCount: 0 };
+
   return (
     <main className="h-screen p-4 md:p-8 flex justify-center items-center">
       <div className="w-full max-w-6xl h-full bg-mural-creme retro-border rounded-xl flex flex-col overflow-hidden">
@@ -49,13 +55,18 @@ export default async function Home() {
           </div>
 
           {user ? (
-            <div className="flex items-center gap-4 text-mural-creme">
+            <div className="flex items-center gap-3 text-mural-creme">
               <span className="text-sm font-bold hidden md:inline">
                 Olá,{" "}
                 <span className="text-yellow-300">
                   {profile?.nickname ?? user.email?.split("@")[0]}
                 </span>
               </span>
+              <NotificationBell
+                user={user}
+                initialNotifications={initialNotifications}
+                initialUnreadCount={unreadCount}
+              />
               <form action={signOut}>
                 <button
                   type="submit"

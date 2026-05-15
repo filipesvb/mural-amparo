@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import PostCard from "@/components/PostCard";
+import NotificationBell from "@/components/NotificationBell";
 import { signOut } from "@/app/actions";
+import { fetchInitialNotifications } from "@/utils/notifications";
 import type { PostWithRelations } from "@/utils/types";
 
 export default async function PerfilPublicoPage({
@@ -48,6 +50,10 @@ export default async function PerfilPublicoPage({
     0,
   );
 
+  const { notifications: initialNotifications, unreadCount } = user
+    ? await fetchInitialNotifications(user.id)
+    : { notifications: [], unreadCount: 0 };
+
   const isOwner = user?.id === profile.id;
   const memberSince = profile.created_at
     ? new Date(profile.created_at).toLocaleDateString("pt-BR", {
@@ -72,14 +78,21 @@ export default async function PerfilPublicoPage({
             </h1>
           </div>
           {user ? (
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="bg-red-800 text-white px-3 py-1 text-xs font-bold border border-white retro-button-active"
-              >
-                Sair [X]
-              </button>
-            </form>
+            <div className="flex items-center gap-3">
+              <NotificationBell
+                user={user}
+                initialNotifications={initialNotifications}
+                initialUnreadCount={unreadCount}
+              />
+              <form action={signOut}>
+                <button
+                  type="submit"
+                  className="bg-red-800 text-white px-3 py-1 text-xs font-bold border border-white retro-button-active"
+                >
+                  Sair [X]
+                </button>
+              </form>
+            </div>
           ) : (
             <Link
               href="/login"

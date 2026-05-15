@@ -34,3 +34,20 @@ export type PostWithRelations = Post & {
   likes: Pick<Like, "user_id">[];
   comments: Comment[];
 };
+
+export type NotificationType = "like" | "comment";
+
+export type Notification = {
+  id: number;
+  recipient_id: string;
+  actor_id: string | null;
+  type: NotificationType;
+  post_id: number | null;
+  comment_id: number | null;
+  read_at: string | null;
+  created_at: string;
+};
+
+export type NotificationWithActor = Notification & {
+  actor: Pick<Profile, "nickname" | "avatar_seed"> | null;
+};
