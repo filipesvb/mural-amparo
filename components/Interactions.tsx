@@ -9,6 +9,8 @@ import {
 import { useEffect, useState, useTransition } from "react";
 import type { Comment } from "@/utils/types";
 import { EDIT_WINDOW_MS } from "@/utils/feed";
+import { RenderWithMentions } from "./MentionsProvider";
+import MentionInput from "./MentionInput";
 
 export function PostInteractions({
   postId,
@@ -80,12 +82,15 @@ export function PostInteractions({
                 className="flex gap-2 mt-2"
               >
                 <input type="hidden" name="post_id" value={postId} />
-                <input
-                  name="content"
-                  required
-                  placeholder="Escreva um comentário..."
-                  className="flex-1 p-1 text-[10px] bg-white border border-mural-dark focus:outline-none"
-                />
+                <div className="flex-1">
+                  <MentionInput
+                    as="input"
+                    name="content"
+                    required
+                    placeholder="Escreva um comentário... use @ para mencionar"
+                    className="w-full p-1 text-[10px] bg-white border border-mural-dark focus:outline-none"
+                  />
+                </div>
                 <button className="bg-mural-dark text-white px-2 py-1 text-[10px] font-bold">
                   Enviar
                 </button>
@@ -161,7 +166,8 @@ function CommentRow({
       {isEditing ? (
         <form action={handleEditSubmit} className="space-y-1">
           <input type="hidden" name="comment_id" value={comment.id} />
-          <input
+          <MentionInput
+            as="input"
             name="content"
             defaultValue={comment.content}
             required
@@ -197,7 +203,7 @@ function CommentRow({
             <span className="font-bold text-mural-brown">
               {comment.author_name}:
             </span>{" "}
-            {comment.content}
+            <RenderWithMentions text={comment.content} />
           </p>
           {isOwner && (
             <div className="flex gap-1 text-[9px] font-bold shrink-0">

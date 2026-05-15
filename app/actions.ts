@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { z } from "zod";
-import { credentialsSchema } from "@/utils/validation";
+import { credentialsSchema, nicknameSchema } from "@/utils/validation";
 import type { PostWithRelations } from "@/utils/types";
 import { FEED_PAGE_SIZE, EDIT_WINDOW_MS } from "@/utils/feed";
 
@@ -398,8 +398,14 @@ export async function updateProfile(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Não autorizado" };
 
-  const nickname = (formData.get("nickname") as string).trim();
+  const rawNickname = (formData.get("nickname") as string).trim();
   const avatar_seed = (formData.get("avatar_seed") as string).trim();
+
+  const parsed = nicknameSchema.safeParse(rawNickname);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const nickname = parsed.data;
 
   const { error } = await supabase
     .from("profiles")

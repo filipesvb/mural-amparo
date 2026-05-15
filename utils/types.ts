@@ -35,7 +35,7 @@ export type PostWithRelations = Post & {
   comments: Comment[];
 };
 
-export type NotificationType = "like" | "comment";
+export type NotificationType = "like" | "comment" | "mention";
 
 export type Notification = {
   id: number;

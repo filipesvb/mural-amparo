@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createPost } from "@/app/actions";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/utils/types";
+import MentionInput from "./MentionInput";
 
 export default function CreatePostWidget({
   user,
@@ -86,9 +87,10 @@ export default function CreatePostWidget({
           value={profile?.nickname || user.email?.split("@")[0]}
         />
 
-        <textarea
+        <MentionInput
+          as="textarea"
           name="content"
-          placeholder="Digite seu recado aqui..."
+          placeholder="Digite seu recado aqui... use @ para mencionar moradores"
           required
           rows={3}
           className="w-full p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none text-sm resize-none"

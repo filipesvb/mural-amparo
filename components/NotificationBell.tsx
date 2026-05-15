@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type {
   Notification,
+  NotificationType,
   NotificationWithActor,
   Profile,
 } from "@/utils/types";
@@ -155,11 +156,25 @@ export default function NotificationBell({
   );
 }
 
+function describeNotification(type: NotificationType, hasComment: boolean) {
+  switch (type) {
+    case "like":
+      return { action: "curtiu seu recado", icon: "❤️" };
+    case "comment":
+      return { action: "comentou no seu recado", icon: "💬" };
+    case "mention":
+      return {
+        action: hasComment
+          ? "te mencionou em um comentário"
+          : "te mencionou em um recado",
+        icon: "📣",
+      };
+  }
+}
+
 function NotificationRow({ notif }: { notif: NotificationWithActor }) {
   const actorName = notif.actor?.nickname ?? "Alguém";
-  const action =
-    notif.type === "like" ? "curtiu seu recado" : "comentou no seu recado";
-  const icon = notif.type === "like" ? "❤️" : "💬";
+  const { action, icon } = describeNotification(notif.type, !!notif.comment_id);
   const avatarSeed = (
     notif.actor?.avatar_seed ||
     notif.actor?.nickname ||

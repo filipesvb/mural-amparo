@@ -4,8 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import PostCard from "@/components/PostCard";
 import NotificationBell from "@/components/NotificationBell";
+import { MentionsProvider } from "@/components/MentionsProvider";
 import { signOut } from "@/app/actions";
 import { fetchInitialNotifications } from "@/utils/notifications";
+import { collectMentionsFromPosts } from "@/utils/mentions";
+import { fetchValidMentions } from "@/utils/mentions.server";
 import type { PostWithRelations } from "@/utils/types";
 
 export default async function PerfilPublicoPage({
@@ -53,6 +56,10 @@ export default async function PerfilPublicoPage({
   const { notifications: initialNotifications, unreadCount } = user
     ? await fetchInitialNotifications(user.id)
     : { notifications: [], unreadCount: 0 };
+
+  const initialValidMentions = await fetchValidMentions(
+    collectMentionsFromPosts(postsList),
+  );
 
   const isOwner = user?.id === profile.id;
   const memberSince = profile.created_at
@@ -162,14 +169,16 @@ export default async function PerfilPublicoPage({
                 : `${profile.nickname} ainda não deixou recados no Mural.`}
             </div>
           ) : (
-            postsList.map((post, index) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                user={user}
-                bgClass={index % 2 === 0 ? "bg-white" : "bg-mural-green"}
-              />
-            ))
+            <MentionsProvider initialValidMentions={initialValidMentions}>
+              {postsList.map((post, index) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  user={user}
+                  bgClass={index % 2 === 0 ? "bg-white" : "bg-mural-green"}
+                />
+              ))}
+            </MentionsProvider>
           )}
         </section>
 

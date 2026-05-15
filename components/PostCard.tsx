@@ -8,6 +8,8 @@ import type { PostWithRelations } from "@/utils/types";
 import { EDIT_WINDOW_MS } from "@/utils/feed";
 import { deletePost, editPost } from "@/app/actions";
 import { PostInteractions } from "./Interactions";
+import { RenderWithMentions } from "./MentionsProvider";
+import MentionInput from "./MentionInput";
 
 export default function PostCard({
   post,
@@ -137,7 +139,8 @@ export default function PostCard({
       {isEditing ? (
         <form action={handleEditSubmit} className="mb-4 space-y-2">
           <input type="hidden" name="post_id" value={post.id} />
-          <textarea
+          <MentionInput
+            as="textarea"
             name="content"
             defaultValue={post.content}
             required
@@ -171,7 +174,9 @@ export default function PostCard({
           </div>
         </form>
       ) : (
-        <p className="text-sm leading-relaxed mb-4">{post.content}</p>
+        <p className="text-sm leading-relaxed mb-4 whitespace-pre-wrap">
+          <RenderWithMentions text={post.content} />
+        </p>
       )}
 
       <PostInteractions

@@ -4,8 +4,12 @@ import Link from "next/link";
 import { signOut } from "@/app/actions";
 import { FEED_PAGE_SIZE } from "@/utils/feed";
 import { fetchInitialNotifications } from "@/utils/notifications";
+import { collectMentionsFromPosts } from "@/utils/mentions";
+import { fetchValidMentions } from "@/utils/mentions.server";
 import RealtimeFeed from "@/components/RealtimeFeed";
 import NotificationBell from "@/components/NotificationBell";
+import { MentionsProvider } from "@/components/MentionsProvider";
+import type { PostWithRelations } from "@/utils/types";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -40,6 +44,11 @@ export default async function Home() {
   const { notifications: initialNotifications, unreadCount } = user
     ? await fetchInitialNotifications(user.id)
     : { notifications: [], unreadCount: 0 };
+
+  const postsList: PostWithRelations[] = posts ?? [];
+  const initialValidMentions = await fetchValidMentions(
+    collectMentionsFromPosts(postsList),
+  );
 
   return (
     <main className="h-screen p-4 md:p-8 flex justify-center items-center">
@@ -124,9 +133,11 @@ export default async function Home() {
               </div>
             )}
 
-            <RealtimeFeed initialPosts={posts || []} user={user} />
+            <MentionsProvider initialValidMentions={initialValidMentions}>
+              <RealtimeFeed initialPosts={postsList} user={user} />
+            </MentionsProvider>
 
-            {posts?.length === 0 && (
+            {postsList.length === 0 && (
               <div className="text-center p-8 opacity-50 italic">
                 Nenhum recado por aqui ainda... Seja o primeiro!
               </div>
