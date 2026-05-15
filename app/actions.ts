@@ -9,6 +9,75 @@ import { credentialsSchema, nicknameSchema } from "@/utils/validation";
 import type { PostWithRelations } from "@/utils/types";
 import { FEED_PAGE_SIZE, EDIT_WINDOW_MS } from "@/utils/feed";
 
+export type SearchProfileHit = {
+  nickname: string;
+  avatar_seed: string | null;
+};
+
+export type SearchPostHit = {
+  id: number;
+  content: string;
+  created_at: string;
+  author_name: string;
+  author_nickname: string | null;
+  author_avatar_seed: string | null;
+};
+
+export type SearchResults = {
+  profiles: SearchProfileHit[];
+  posts: SearchPostHit[];
+};
+
+export async function searchAll(query: string): Promise<SearchResults> {
+  const q = query.trim();
+  if (q.length < 2) return { profiles: [], posts: [] };
+
+  const supabase = await createClient();
+
+  const [profilesRes, postsRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("nickname, avatar_seed")
+      .ilike("nickname", `%${q}%`)
+      .not("nickname", "is", null)
+      .order("nickname")
+      .limit(3),
+    supabase
+      .from("posts")
+      .select(
+        `id, content, created_at, author_name,
+         profiles (nickname, avatar_seed)`,
+      )
+      .textSearch("search", q, { type: "websearch", config: "portuguese" })
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ]);
+
+  type RawPost = {
+    id: number;
+    content: string;
+    created_at: string;
+    author_name: string;
+    profiles: { nickname: string | null; avatar_seed: string | null } | null;
+  };
+
+  const posts: SearchPostHit[] = (
+    (postsRes.data ?? []) as unknown as RawPost[]
+  ).map((p) => ({
+      id: p.id,
+      content: p.content,
+      created_at: p.created_at,
+      author_name: p.author_name,
+      author_nickname: p.profiles?.nickname ?? null,
+      author_avatar_seed: p.profiles?.avatar_seed ?? null,
+    }));
+
+  return {
+    profiles: (profilesRes.data ?? []) as SearchProfileHit[],
+    posts,
+  };
+}
+
 export async function loadMorePosts(
   beforeCreatedAt: string,
 ): Promise<PostWithRelations[]> {

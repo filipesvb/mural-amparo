@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import PostCard from "@/components/PostCard";
 import NotificationBell from "@/components/NotificationBell";
+import SearchBar from "@/components/SearchBar";
 import { MentionsProvider } from "@/components/MentionsProvider";
 import { signOut } from "@/app/actions";
 import { fetchInitialNotifications } from "@/utils/notifications";
@@ -84,6 +85,11 @@ export default async function PerfilPublicoPage({
               👤 Perfil de Morador
             </h1>
           </div>
+
+          <div className="flex-1 mx-4 hidden md:flex justify-center">
+            <SearchBar />
+          </div>
+
           {user ? (
             <div className="flex items-center gap-3">
               <NotificationBell

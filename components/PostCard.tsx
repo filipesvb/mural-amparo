@@ -84,7 +84,7 @@ export default function PostCard({
   }
 
   return (
-    <article className={`p-4 retro-border ${bgClass}`}>
+    <article id={`recado-${post.id}`} className={`p-4 retro-border ${bgClass}`}>
       <div className="flex justify-between items-start mb-2 gap-2">
         <div className="flex gap-2 items-center">
           {authorHref ? (

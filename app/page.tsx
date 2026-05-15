@@ -8,6 +8,7 @@ import { collectMentionsFromPosts } from "@/utils/mentions";
 import { fetchValidMentions } from "@/utils/mentions.server";
 import RealtimeFeed from "@/components/RealtimeFeed";
 import NotificationBell from "@/components/NotificationBell";
+import SearchBar from "@/components/SearchBar";
 import { MentionsProvider } from "@/components/MentionsProvider";
 import type { PostWithRelations } from "@/utils/types";
 
@@ -61,6 +62,10 @@ export default async function Home() {
             <h1 className="text-2xl font-bold text-mural-creme tracking-tight">
               Mural Amparo
             </h1>
+          </div>
+
+          <div className="flex-1 mx-4 hidden md:flex justify-center">
+            <SearchBar />
           </div>
 
           {user ? (
