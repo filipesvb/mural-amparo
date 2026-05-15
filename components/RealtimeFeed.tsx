@@ -73,6 +73,31 @@ export default function RealtimeFeed({
       )
       .on(
         "postgres_changes",
+        { event: "DELETE", schema: "public", table: "likes" },
+        (payload) => {
+          // Requer `alter table likes replica identity full` no Postgres
+          // para que payload.old traga post_id e user_id (default só carrega PK).
+          const oldLike = payload.old as Partial<{
+            post_id: number;
+            user_id: string;
+          }>;
+          if (!oldLike.post_id || !oldLike.user_id) return;
+          setPosts((prev) =>
+            prev.map((post) =>
+              post.id === oldLike.post_id
+                ? {
+                    ...post,
+                    likes: post.likes.filter(
+                      (l) => l.user_id !== oldLike.user_id,
+                    ),
+                  }
+                : post,
+            ),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
         { event: "INSERT", schema: "public", table: "comments" },
         (payload) => {
           const newComment = payload.new as Comment;
@@ -118,10 +143,10 @@ export default function RealtimeFeed({
           );
         },
       )
-      // DELETE em likes/comments não dispara update local: o payload.old
-      // só carrega o primary key sem REPLICA IDENTITY FULL no Postgres.
-      // Para comments, o cliente que apaga atualiza o estado local via callback
-      // (onCommentDeleted). Outros clientes só veem após reload.
+      // DELETE em comments só vem com PK no payload.old (replica identity default).
+      // O cliente que apaga atualiza estado local via callback (onCommentDeleted).
+      // Outros clientes só veem após reload. Para likes, mudamos replica identity
+      // pra FULL no Postgres, então o handler de DELETE acima funciona pra todos.
       .subscribe();
 
     return () => {
