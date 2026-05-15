@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { z } from "zod";
 import { credentialsSchema } from "@/utils/validation";
 import type { PostWithRelations } from "@/utils/types";
 import { FEED_PAGE_SIZE, EDIT_WINDOW_MS } from "@/utils/feed";
@@ -119,6 +120,60 @@ export async function authenticate(formData: FormData) {
   }
 
   // Conta criada com sessão imediata (caso confirmação esteja desligada no Supabase)
+  revalidatePath("/");
+  redirect("/");
+}
+
+export async function requestPasswordReset(formData: FormData) {
+  const email = z
+    .email("E-mail inválido")
+    .safeParse(formData.get("email"));
+  if (!email.success) {
+    return { error: email.error.issues[0].message };
+  }
+
+  const supabase = await createClient();
+
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  const redirectTo = `${proto}://${host}/auth/confirm?next=/redefinir-senha`;
+
+  // O Supabase, por padrão, não vaza se o e-mail existe — devolve sucesso
+  // independente. Mantemos resposta genérica do nosso lado também.
+  await supabase.auth.resetPasswordForEmail(email.data, { redirectTo });
+
+  return {
+    info: "Se a conta existir, enviamos um link de redefinição para o e-mail informado.",
+  };
+}
+
+export async function updatePassword(formData: FormData) {
+  const password = z
+    .string()
+    .min(6, "Senha deve ter ao menos 6 caracteres")
+    .safeParse(formData.get("password"));
+  if (!password.success) {
+    return { error: password.error.issues[0].message };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return {
+      error: "Sessão expirada. Clique de novo no link enviado por e-mail.",
+    };
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: password.data,
+  });
+  if (error) {
+    return { error: error.message };
+  }
+
   revalidatePath("/");
   redirect("/");
 }
