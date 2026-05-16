@@ -563,6 +563,10 @@ export async function addComment(formData: FormData) {
   const postId = formData.get("post_id");
   const content = formData.get("content") as string;
 
+  const parentRaw = formData.get("parent_comment_id");
+  const parentId =
+    parentRaw && Number(parentRaw) ? Number(parentRaw) : null;
+
   if (!content) return { error: "O comentário não pode estar vazio." };
 
   // Mantém consistência com posts: nickname do perfil > prefixo do e-mail > "Morador"
@@ -580,6 +584,7 @@ export async function addComment(formData: FormData) {
     user_id: user.id,
     content,
     author_name: authorName,
+    parent_comment_id: parentId,
   });
 
   if (error) {

@@ -23,6 +23,7 @@ export type Comment = {
   content: string;
   author_name: string;
   created_at: string;
+  parent_comment_id: number | null;
 };
 
 export type Post = {
@@ -46,7 +47,8 @@ export type NotificationType =
   | "comment"
   | "mention"
   | "reaction"
-  | "follow";
+  | "follow"
+  | "reply";
 
 export type Notification = {
   id: number;

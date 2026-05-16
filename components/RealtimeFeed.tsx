@@ -220,7 +220,13 @@ export default function RealtimeFeed({
           post.id === postId
             ? {
                 ...post,
-                comments: post.comments.filter((c) => c.id !== commentId),
+                // Remove o comentário e, se for raiz, suas respostas
+                // (no banco isso cai por on delete cascade)
+                comments: post.comments.filter(
+                  (c) =>
+                    c.id !== commentId &&
+                    c.parent_comment_id !== commentId,
+                ),
               }
             : post,
         ),

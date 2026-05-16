@@ -80,14 +80,29 @@ export function PostInteractions({
 
       {showComments && (
         <div className="mt-4 space-y-3 bg-mural-creme/50 p-3 retro-border">
-          {comments.map((comment) => (
-            <CommentRow
-              key={comment.id}
-              comment={comment}
-              currentUserId={currentUserId}
-              onDeleted={onCommentDeleted}
-            />
-          ))}
+          {(() => {
+            const topLevel = comments.filter(
+              (c) => c.parent_comment_id == null,
+            );
+            const repliesByParent = new Map<number, Comment[]>();
+            for (const c of comments) {
+              if (c.parent_comment_id == null) continue;
+              const list = repliesByParent.get(c.parent_comment_id) ?? [];
+              list.push(c);
+              repliesByParent.set(c.parent_comment_id, list);
+            }
+            return topLevel.map((comment) => (
+              <CommentThread
+                key={comment.id}
+                comment={comment}
+                replies={repliesByParent.get(comment.id) ?? []}
+                postId={postId}
+                currentUserId={currentUserId}
+                isLoggedIn={isLoggedIn}
+                onDeleted={onCommentDeleted}
+              />
+            ));
+          })()}
 
           {isLoggedIn ? (
             <>
@@ -244,6 +259,104 @@ function CommentRow({
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function CommentThread({
+  comment,
+  replies,
+  postId,
+  currentUserId,
+  isLoggedIn,
+  onDeleted,
+}: {
+  comment: Comment;
+  replies: Comment[];
+  postId: number;
+  currentUserId: string | null;
+  isLoggedIn: boolean;
+  onDeleted?: (commentId: number) => void;
+}) {
+  const [isReplying, setIsReplying] = useState(false);
+  const [replyError, setReplyError] = useState("");
+  const [isSending, startSendTransition] = useTransition();
+
+  function handleReplySubmit(formData: FormData) {
+    setReplyError("");
+    startSendTransition(async () => {
+      const result = await addComment(formData);
+      if (result?.error) {
+        setReplyError(result.error);
+        return;
+      }
+      setIsReplying(false);
+    });
+  }
+
+  return (
+    <div>
+      <CommentRow
+        comment={comment}
+        currentUserId={currentUserId}
+        onDeleted={onDeleted}
+      />
+
+      {(replies.length > 0 || isReplying) && (
+        <div className="mt-2 ml-4 pl-3 border-l-2 border-mural-dark/15 space-y-2">
+          {replies.map((reply) => (
+            <CommentRow
+              key={reply.id}
+              comment={reply}
+              currentUserId={currentUserId}
+              onDeleted={onDeleted}
+            />
+          ))}
+
+          {isReplying && (
+            <>
+              <form action={handleReplySubmit} className="flex gap-2">
+                <input type="hidden" name="post_id" value={postId} />
+                <input
+                  type="hidden"
+                  name="parent_comment_id"
+                  value={comment.id}
+                />
+                <div className="flex-1">
+                  <MentionInput
+                    as="input"
+                    name="content"
+                    required
+                    placeholder="Escreva uma resposta... use @ para mencionar"
+                    className="w-full p-1 text-[10px] bg-white border border-mural-dark focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSending}
+                  className="bg-mural-dark text-white px-2 py-1 text-[10px] font-bold disabled:opacity-50"
+                >
+                  {isSending ? "..." : "Responder"}
+                </button>
+              </form>
+              {replyError && (
+                <p className="text-[10px] text-red-700 italic">
+                  ⚠️ {replyError}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {isLoggedIn && (
+        <button
+          onClick={() => setIsReplying((v) => !v)}
+          className="mt-1 text-[10px] font-bold opacity-60 hover:opacity-100 hover:underline"
+        >
+          {isReplying ? "Cancelar" : "↩︎ Responder"}
+        </button>
       )}
     </div>
   );
