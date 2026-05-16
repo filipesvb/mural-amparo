@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Image from "next/image";
 import { createPost } from "@/app/actions";
 import type { User } from "@supabase/supabase-js";
 import type { Profile } from "@/utils/types";
+import {
+  ALLOWED_POST_IMAGE_TYPES,
+  MAX_POST_IMAGE_BYTES,
+} from "@/utils/storage";
 import MentionInput from "./MentionInput";
 
 export default function CreatePostWidget({
@@ -15,6 +20,43 @@ export default function CreatePostWidget({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function clearImage() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setError("");
+    const file = e.target.files?.[0];
+    if (!file) {
+      clearImage();
+      return;
+    }
+    if (
+      !(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)
+    ) {
+      setError("Formato inválido. Use JPG, PNG, WebP ou GIF.");
+      clearImage();
+      return;
+    }
+    if (file.size > MAX_POST_IMAGE_BYTES) {
+      setError("Imagem muito grande. O limite é 5 MB.");
+      clearImage();
+      return;
+    }
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+
+  function reset() {
+    clearImage();
+    setError("");
+    setIsOpen(false);
+  }
 
   // Se o morador não estiver logado, o botão leva para o login
   if (!user) {
@@ -58,7 +100,7 @@ export default function CreatePostWidget({
           setError(result.error);
           return;
         }
-        setIsOpen(false);
+        reset();
       }}
       className="bg-white p-4 retro-border mb-6 relative shadow-md"
     >
@@ -68,7 +110,7 @@ export default function CreatePostWidget({
         </h3>
         <button
           type="button"
-          onClick={() => setIsOpen(false)}
+          onClick={reset}
           className="text-red-700 font-bold hover:underline text-sm"
         >
           [X] Fechar
@@ -91,12 +133,42 @@ export default function CreatePostWidget({
           as="textarea"
           name="content"
           placeholder="Digite seu recado aqui... use @ para mencionar moradores"
-          required
           rows={3}
           className="w-full p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none text-sm resize-none"
         />
 
-        <div className="flex gap-2">
+        {previewUrl && (
+          <div className="relative inline-block">
+            <Image
+              src={previewUrl}
+              alt="Pré-visualização da imagem"
+              width={1200}
+              height={900}
+              unoptimized
+              className="h-auto w-auto max-w-full max-h-80 object-contain bg-mural-creme retro-border"
+            />
+            <button
+              type="button"
+              onClick={clearImage}
+              className="absolute top-1 right-1 bg-red-800 text-white text-xs font-bold px-2 py-1 retro-border"
+            >
+              ✕ Remover
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="bg-mural-creme text-mural-dark px-3 py-2 text-sm font-bold retro-border retro-button-active cursor-pointer">
+            🖼️ {previewUrl ? "Trocar imagem" : "Anexar imagem"}
+            <input
+              ref={fileInputRef}
+              type="file"
+              name="image"
+              accept={ALLOWED_POST_IMAGE_TYPES.join(",")}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </label>
           <button
             type="submit"
             className="bg-mural-brown text-white px-6 py-2 font-bold retro-border retro-button-active flex-1"

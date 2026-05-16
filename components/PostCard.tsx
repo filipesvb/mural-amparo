@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { PostWithRelations } from "@/utils/types";
 import { EDIT_WINDOW_MS } from "@/utils/feed";
+import { postImageUrl } from "@/utils/storage";
 import { deletePost, editPost } from "@/app/actions";
 import { PostInteractions } from "./Interactions";
 import { RenderWithMentions } from "./MentionsProvider";
@@ -174,9 +175,29 @@ export default function PostCard({
           </div>
         </form>
       ) : (
-        <p className="text-sm leading-relaxed mb-4 whitespace-pre-wrap">
-          <RenderWithMentions text={post.content} />
-        </p>
+        post.content && (
+          <p className="text-sm leading-relaxed mb-4 whitespace-pre-wrap">
+            <RenderWithMentions text={post.content} />
+          </p>
+        )
+      )}
+
+      {post.image_path && (
+        <a
+          href={postImageUrl(post.image_path)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block mb-4"
+        >
+          <Image
+            src={postImageUrl(post.image_path)}
+            alt="Imagem do recado"
+            width={1200}
+            height={900}
+            sizes="(max-width: 768px) 100vw, 28rem"
+            className="h-auto w-auto max-w-full max-h-112 object-contain bg-mural-creme retro-border"
+          />
+        </a>
       )}
 
       <PostInteractions

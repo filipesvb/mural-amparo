@@ -8,6 +8,12 @@ import { z } from "zod";
 import { credentialsSchema, nicknameSchema } from "@/utils/validation";
 import type { PostWithRelations } from "@/utils/types";
 import { FEED_PAGE_SIZE, EDIT_WINDOW_MS } from "@/utils/feed";
+import {
+  POST_IMAGES_BUCKET,
+  MAX_POST_IMAGE_BYTES,
+  ALLOWED_POST_IMAGE_TYPES,
+  postImageExtension,
+} from "@/utils/storage";
 
 export type SearchProfileHit = {
   nickname: string;
@@ -111,21 +117,59 @@ export async function createPost(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Você precisa estar logado para postar." };
 
-  const content = formData.get("content") as string;
+  const content = ((formData.get("content") as string) ?? "").trim();
   const author_name = formData.get("author_name") as string; // Mantemos por segurança/legado
 
-  if (!content) return { error: "O recado não pode estar vazio." };
+  const imageFile = formData.get("image");
+  const hasImage = imageFile instanceof File && imageFile.size > 0;
+
+  if (!content && !hasImage)
+    return { error: "Escreva um recado ou anexe uma imagem." };
+
+  let image_path: string | null = null;
+
+  if (hasImage) {
+    const file = imageFile as File;
+
+    if (
+      !(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)
+    ) {
+      return { error: "Formato inválido. Use JPG, PNG, WebP ou GIF." };
+    }
+    if (file.size > MAX_POST_IMAGE_BYTES) {
+      return { error: "Imagem muito grande. O limite é 5 MB." };
+    }
+
+    const ext = postImageExtension(file.type)!;
+    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(POST_IMAGES_BUCKET)
+      .upload(path, file, { contentType: file.type });
+
+    if (uploadError) {
+      console.error("Erro ao subir imagem:", uploadError);
+      return { error: "Não foi possível enviar a imagem." };
+    }
+
+    image_path = path;
+  }
 
   const { error } = await supabase.from("posts").insert([
     {
       content,
       author_name,
       user_id: user.id,
+      image_path,
     },
   ]);
 
   if (error) {
     console.error("Erro ao postar:", error);
+    // Não deixa arquivo órfão se o insert falhou após o upload
+    if (image_path) {
+      await supabase.storage.from(POST_IMAGES_BUCKET).remove([image_path]);
+    }
     return { error: "Não foi possível publicar o recado." };
   }
 
@@ -344,7 +388,7 @@ export async function deletePost(postId: number) {
 
   const { data: post } = await supabase
     .from("posts")
-    .select("user_id")
+    .select("user_id, image_path")
     .eq("id", postId)
     .single();
   if (!post) return { error: "Recado não encontrado." };
@@ -355,6 +399,13 @@ export async function deletePost(postId: number) {
   if (error) {
     console.error("Erro ao excluir recado:", error);
     return { error: "Não foi possível excluir o recado." };
+  }
+
+  // Remove o arquivo do Storage depois que a linha some (best-effort)
+  if (post.image_path) {
+    await supabase.storage
+      .from(POST_IMAGES_BUCKET)
+      .remove([post.image_path]);
   }
 
   revalidatePath("/");
