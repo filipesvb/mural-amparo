@@ -162,6 +162,8 @@ function describeNotification(type: NotificationType, hasComment: boolean) {
       return { action: "curtiu seu recado", icon: "❤️" };
     case "reaction":
       return { action: "reagiu ao seu recado", icon: "😊" };
+    case "follow":
+      return { action: "começou a te seguir", icon: "👥" };
     case "comment":
       return { action: "comentou no seu recado", icon: "💬" };
     case "mention":

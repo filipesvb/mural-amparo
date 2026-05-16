@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import PostCard from "@/components/PostCard";
+import FollowButton from "@/components/FollowButton";
 import NotificationBell from "@/components/NotificationBell";
 import SearchBar from "@/components/SearchBar";
 import { MentionsProvider } from "@/components/MentionsProvider";
@@ -63,6 +64,30 @@ export default async function PerfilPublicoPage({
   );
 
   const isOwner = user?.id === profile.id;
+
+  const [{ count: followersCount }, { count: followingCount }] =
+    await Promise.all([
+      supabase
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("following_id", profile.id),
+      supabase
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("follower_id", profile.id),
+    ]);
+
+  let isFollowing = false;
+  if (user && !isOwner) {
+    const { data: followRow } = await supabase
+      .from("follows")
+      .select("follower_id")
+      .eq("follower_id", user.id)
+      .eq("following_id", profile.id)
+      .maybeSingle();
+    isFollowing = !!followRow;
+  }
+
   const memberSince = profile.created_at
     ? new Date(profile.created_at).toLocaleDateString("pt-BR", {
         month: "long",
@@ -150,16 +175,33 @@ export default async function PerfilPublicoPage({
                     : "reações recebidas"}
                 </span>
               </span>
+              <span className="bg-white retro-border px-3 py-1">
+                👥 {followersCount ?? 0}{" "}
+                <span className="font-normal opacity-70">
+                  {(followersCount ?? 0) === 1 ? "seguidor" : "seguidores"}
+                </span>
+              </span>
+              <span className="bg-white retro-border px-3 py-1">
+                {followingCount ?? 0}{" "}
+                <span className="font-normal opacity-70">seguindo</span>
+              </span>
             </div>
           </div>
 
-          {isOwner && (
+          {isOwner ? (
             <Link
               href="/perfil/editar"
               className="bg-mural-brown text-white px-4 py-2 text-sm font-bold retro-border retro-button-active shrink-0"
             >
               ✏️ Editar perfil
             </Link>
+          ) : (
+            user && (
+              <FollowButton
+                targetUserId={profile.id}
+                initialIsFollowing={isFollowing}
+              />
+            )
           )}
         </section>
 

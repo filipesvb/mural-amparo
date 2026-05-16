@@ -1,7 +1,9 @@
 import CreatePostWidget from "@/components/CreatePostWidget";
 import { createClient } from "@/utils/supabase/server";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions";
+import { fetchFollowingIds } from "@/utils/follows.server";
 import { FEED_PAGE_SIZE } from "@/utils/feed";
 import { fetchInitialNotifications } from "@/utils/notifications";
 import { collectMentionsFromPosts } from "@/utils/mentions";
@@ -21,37 +23,63 @@ import Image from "next/image";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ cat?: string }>;
+  searchParams: Promise<{ cat?: string; feed?: string }>;
 }) {
   const supabase = await createClient();
 
-  const { cat } = await searchParams;
+  const { cat, feed } = await searchParams;
   const activeCategory: PostCategory | null = isPostCategory(cat)
     ? cat
     : null;
+  const activeFeed: "seguindo" | null =
+    feed === "seguindo" ? "seguindo" : null;
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let postsQuery = supabase
-    .from("posts")
-    .select(
-      `
-      *,
-      profiles (nickname, avatar_seed),
-      reactions (user_id, emoji),
-      comments (*)
-    `,
-    );
-
-  if (activeCategory) {
-    postsQuery = postsQuery.eq("category", activeCategory);
+  // Feed "Seguindo" exige login (proteção página a página)
+  if (activeFeed === "seguindo" && !user) {
+    redirect("/login");
   }
 
-  const { data: posts, error } = await postsQuery
-    .order("created_at", { ascending: false })
-    .limit(FEED_PAGE_SIZE);
+  // IDs que o usuário segue: usados na query e no filtro de realtime
+  const followingIds =
+    activeFeed === "seguindo" && user
+      ? await fetchFollowingIds(user.id)
+      : null;
+
+  let posts: PostWithRelations[] | null = [];
+  let error: { message: string } | null = null;
+
+  // Se está no "Seguindo" mas não segue ninguém, nem consulta
+  if (activeFeed === "seguindo" && (followingIds?.length ?? 0) === 0) {
+    posts = [];
+  } else {
+    let postsQuery = supabase
+      .from("posts")
+      .select(
+        `
+        *,
+        profiles (nickname, avatar_seed),
+        reactions (user_id, emoji),
+        comments (*)
+      `,
+      );
+
+    if (followingIds) {
+      postsQuery = postsQuery.in("user_id", followingIds);
+    }
+    if (activeCategory) {
+      postsQuery = postsQuery.eq("category", activeCategory);
+    }
+
+    const res = await postsQuery
+      .order("created_at", { ascending: false })
+      .limit(FEED_PAGE_SIZE);
+    posts = res.data as PostWithRelations[] | null;
+    error = res.error;
+  }
 
   if (error) {
     console.error("Falha ao buscar posts:", error);
@@ -133,9 +161,19 @@ export default async function Home({
             <nav className="space-y-4 pt-4 flex flex-col">
               <Link
                 href="/"
-                className="flex items-center gap-2 hover:bg-mural-green p-1 transition-colors"
+                className={`flex items-center gap-2 hover:bg-mural-green p-1 transition-colors ${
+                  activeFeed === null ? "bg-mural-green font-bold" : ""
+                }`}
               >
                 📰 Feed Público
+              </Link>
+              <Link
+                href="/?feed=seguindo"
+                className={`flex items-center gap-2 hover:bg-mural-green p-1 transition-colors ${
+                  activeFeed === "seguindo" ? "bg-mural-green font-bold" : ""
+                }`}
+              >
+                👥 Seguindo
               </Link>
               <Link
                 href="/perfil"
@@ -157,7 +195,7 @@ export default async function Home({
 
             <nav className="flex flex-wrap gap-2 text-xs font-bold">
               <Link
-                href="/"
+                href={activeFeed ? "/?feed=seguindo" : "/"}
                 className={`px-3 py-1 retro-border retro-button-active ${
                   activeCategory === null
                     ? "bg-mural-brown text-white"
@@ -169,7 +207,11 @@ export default async function Home({
               {POST_CATEGORIES.map((c) => (
                 <Link
                   key={c.value}
-                  href={`/?cat=${c.value}`}
+                  href={
+                    activeFeed
+                      ? `/?feed=seguindo&cat=${c.value}`
+                      : `/?cat=${c.value}`
+                  }
                   className={`px-3 py-1 retro-border retro-button-active ${
                     activeCategory === c.value
                       ? "bg-mural-brown text-white"
@@ -190,18 +232,24 @@ export default async function Home({
 
             <MentionsProvider initialValidMentions={initialValidMentions}>
               <RealtimeFeed
-                key={activeCategory ?? "all"}
+                key={`${activeFeed ?? "all"}:${activeCategory ?? "all"}`}
                 initialPosts={postsList}
                 user={user}
                 activeCategory={activeCategory}
+                feedScope={activeFeed}
+                followingIds={followingIds}
               />
             </MentionsProvider>
 
             {postsList.length === 0 && (
               <div className="text-center p-8 opacity-50 italic">
-                {activeCategory
-                  ? "Nenhum recado nesta categoria ainda."
-                  : "Nenhum recado por aqui ainda... Seja o primeiro!"}
+                {activeFeed === "seguindo"
+                  ? (followingIds?.length ?? 0) === 0
+                    ? "Você ainda não segue ninguém. Explore o feed público e siga moradores."
+                    : "Ninguém que você segue publicou recados ainda."
+                  : activeCategory
+                    ? "Nenhum recado nesta categoria ainda."
+                    : "Nenhum recado por aqui ainda... Seja o primeiro!"}
               </div>
             )}
           </section>

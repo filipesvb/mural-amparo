@@ -45,7 +45,8 @@ export type NotificationType =
   | "like"
   | "comment"
   | "mention"
-  | "reaction";
+  | "reaction"
+  | "follow";
 
 export type Notification = {
   id: number;

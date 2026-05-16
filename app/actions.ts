@@ -20,6 +20,7 @@ import {
   DEFAULT_CATEGORY,
   type PostCategory,
 } from "@/utils/categories";
+import { fetchFollowingIds } from "@/utils/follows.server";
 
 export type SearchProfileHit = {
   nickname: string;
@@ -93,6 +94,7 @@ export async function searchAll(query: string): Promise<SearchResults> {
 export async function loadMorePosts(
   beforeCreatedAt: string,
   category?: PostCategory | null,
+  feed?: "seguindo" | null,
 ): Promise<PostWithRelations[]> {
   const supabase = await createClient();
   let query = supabase
@@ -106,6 +108,16 @@ export async function loadMorePosts(
     `,
     )
     .lt("created_at", beforeCreatedAt);
+
+  if (feed === "seguindo") {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return [];
+    const followingIds = await fetchFollowingIds(user.id);
+    if (followingIds.length === 0) return [];
+    query = query.in("user_id", followingIds);
+  }
 
   if (category) query = query.eq("category", category);
 
@@ -318,6 +330,37 @@ export async function markNotificationsRead() {
     .update({ read_at: new Date().toISOString() })
     .eq("recipient_id", user.id)
     .is("read_at", null);
+}
+
+export async function toggleFollow(targetUserId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+  if (user.id === targetUserId)
+    return { error: "Você não pode seguir a si mesmo." };
+
+  const { data: existing } = await supabase
+    .from("follows")
+    .select("follower_id")
+    .eq("follower_id", user.id)
+    .eq("following_id", targetUserId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", user.id)
+      .eq("following_id", targetUserId);
+  } else {
+    await supabase
+      .from("follows")
+      .insert({ follower_id: user.id, following_id: targetUserId });
+  }
+
+  revalidatePath("/");
 }
 
 export async function signOut() {

@@ -14,10 +14,14 @@ export default function RealtimeFeed({
   initialPosts,
   user,
   activeCategory,
+  feedScope,
+  followingIds,
 }: {
   initialPosts: PostWithRelations[];
   user: User | null;
   activeCategory: PostCategory | null;
+  feedScope: "seguindo" | null;
+  followingIds: string[] | null;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(
@@ -25,6 +29,11 @@ export default function RealtimeFeed({
   );
   const [isLoading, setIsLoading] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // Ref evita re-subscrever o canal a cada render (followingIds é novo array)
+  const followingIdsRef = useRef(followingIds);
+  useEffect(() => {
+    followingIdsRef.current = followingIds;
+  });
   const supabase = createClient();
 
   useEffect(() => {
@@ -35,6 +44,12 @@ export default function RealtimeFeed({
         { event: "INSERT", schema: "public", table: "posts" },
         async (payload) => {
           const newPost = payload.new as Post;
+          // Feed "Seguindo": só inserts de quem o usuário segue
+          if (
+            feedScope === "seguindo" &&
+            !followingIdsRef.current?.includes(newPost.user_id)
+          )
+            return;
           // Filtro de categoria ativo: ignora inserts de outra seção
           if (activeCategory && newPost.category !== activeCategory) return;
           const { data: profile } = await supabase
@@ -196,7 +211,7 @@ export default function RealtimeFeed({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, activeCategory]);
+  }, [supabase, activeCategory, feedScope]);
 
   const handleCommentDeleted = useCallback(
     (postId: number, commentId: number) => {
@@ -218,11 +233,11 @@ export default function RealtimeFeed({
     if (isLoading || !hasMore || posts.length === 0) return;
     setIsLoading(true);
     const cursor = posts[posts.length - 1].created_at;
-    const next = await loadMorePosts(cursor, activeCategory);
+    const next = await loadMorePosts(cursor, activeCategory, feedScope);
     setPosts((prev) => [...prev, ...next]);
     if (next.length < FEED_PAGE_SIZE) setHasMore(false);
     setIsLoading(false);
-  }, [isLoading, hasMore, posts, activeCategory]);
+  }, [isLoading, hasMore, posts, activeCategory, feedScope]);
 
   useEffect(() => {
     if (!hasMore) return;
