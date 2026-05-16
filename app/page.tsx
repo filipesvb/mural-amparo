@@ -75,16 +75,15 @@ export default async function Home({
   return (
     <main className="h-screen p-4 md:p-8 flex justify-center items-center">
       <div className="w-full max-w-6xl h-full bg-mural-creme retro-border rounded-xl flex flex-col overflow-hidden">
-        <header className="bg-[#4A3525] shrink-0 p-4 border-b-2 flex justify-between items-center">
+        <header className="wood-header shrink-0 p-4 border-b-2 flex justify-between items-center">
           <div className="flex items-baseline gap-2">
             <Image
-              className=""
               src={"/construcao-amparo-logo.png"}
               width={120}
               height={30}
               alt="Imagem construção Amparo-SP"
             />
-            <h1 className="text-2xl font-bold text-mural-creme tracking-tight">
+            <h1 className="text-2xl font-bold text-mural-creme mural-title">
               Mural Amparo
             </h1>
           </div>

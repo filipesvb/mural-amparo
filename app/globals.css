@@ -47,6 +47,19 @@ body {
     background-image: var(--background-image-wood);
     @apply bg-mural-brown border-mural-dark;
   }
+
+  /* Variante mais escura/quente p/ o header (combina com a logo sépia
+     e dá hierarquia em relação ao rodapé, que usa wood-header-footer) */
+  .wood-header {
+    background-image: var(--background-image-wood);
+    background-color: #5c3a21;
+    @apply border-mural-dark;
+  }
+
+  .mural-title {
+    @apply uppercase tracking-wide;
+    text-shadow: 2px 2px 0 #2d2d2d;
+  }
 }
 
 /* =========================================
