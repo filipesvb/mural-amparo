@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type { Comment, Post, PostWithRelations } from "@/utils/types";
+import type { ReactionEmoji } from "@/utils/reactions";
 import { FEED_PAGE_SIZE } from "@/utils/feed";
 import { loadMorePosts } from "@/app/actions";
 import PostCard from "./PostCard";
@@ -37,7 +38,7 @@ export default function RealtimeFeed({
             .eq("id", newPost.user_id)
             .single();
           setPosts((prev) => [
-            { ...newPost, profiles: profile, likes: [], comments: [] },
+            { ...newPost, profiles: profile, reactions: [], comments: [] },
             ...prev,
           ]);
         },
@@ -56,15 +57,25 @@ export default function RealtimeFeed({
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "likes" },
+        { event: "INSERT", schema: "public", table: "reactions" },
         (payload) => {
-          const newLike = payload.new as { post_id: number; user_id: string };
+          const newReaction = payload.new as {
+            post_id: number;
+            user_id: string;
+            emoji: ReactionEmoji;
+          };
           setPosts((prev) =>
             prev.map((post) =>
-              post.id === newLike.post_id
+              post.id === newReaction.post_id
                 ? {
                     ...post,
-                    likes: [...post.likes, { user_id: newLike.user_id }],
+                    reactions: [
+                      ...post.reactions,
+                      {
+                        user_id: newReaction.user_id,
+                        emoji: newReaction.emoji,
+                      },
+                    ],
                   }
                 : post,
             ),
@@ -73,22 +84,50 @@ export default function RealtimeFeed({
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "likes" },
+        { event: "UPDATE", schema: "public", table: "reactions" },
         (payload) => {
-          // Requer `alter table likes replica identity full` no Postgres
+          // Troca de emoji: requer `replica identity full` para payload.new
+          // trazer post_id+user_id+emoji (default só carrega a PK).
+          const updated = payload.new as Partial<{
+            post_id: number;
+            user_id: string;
+            emoji: ReactionEmoji;
+          }>;
+          if (!updated.post_id || !updated.user_id || !updated.emoji) return;
+          setPosts((prev) =>
+            prev.map((post) =>
+              post.id === updated.post_id
+                ? {
+                    ...post,
+                    reactions: post.reactions.map((r) =>
+                      r.user_id === updated.user_id
+                        ? { ...r, emoji: updated.emoji! }
+                        : r,
+                    ),
+                  }
+                : post,
+            ),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "reactions" },
+        (payload) => {
+          // Requer `alter table reactions replica identity full` no Postgres
           // para que payload.old traga post_id e user_id (default só carrega PK).
-          const oldLike = payload.old as Partial<{
+          const oldReaction = payload.old as Partial<{
             post_id: number;
             user_id: string;
           }>;
-          if (!oldLike.post_id || !oldLike.user_id) return;
+          if (!oldReaction.post_id || !oldReaction.user_id) return;
           setPosts((prev) =>
             prev.map((post) =>
-              post.id === oldLike.post_id
+              post.id === oldReaction.post_id
                 ? {
                     ...post,
-                    likes: post.likes.filter(
-                      (l) => l.user_id !== oldLike.user_id,
+                    reactions: post.reactions.filter(
+                      (r) => r.user_id !== oldReaction.user_id,
                     ),
                   }
                 : post,
@@ -145,8 +184,8 @@ export default function RealtimeFeed({
       )
       // DELETE em comments só vem com PK no payload.old (replica identity default).
       // O cliente que apaga atualiza estado local via callback (onCommentDeleted).
-      // Outros clientes só veem após reload. Para likes, mudamos replica identity
-      // pra FULL no Postgres, então o handler de DELETE acima funciona pra todos.
+      // Outros clientes só veem após reload. Para reactions, mudamos replica
+      // identity pra FULL no Postgres, então UPDATE/DELETE acima valem pra todos.
       .subscribe();
 
     return () => {

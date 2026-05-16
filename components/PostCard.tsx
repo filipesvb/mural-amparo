@@ -28,7 +28,6 @@ export default function PostCard({
   const [isSaving, startSaveTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
 
-  const isLiked = post.likes?.some((like) => like.user_id === user?.id);
   const displayName = post.profiles?.nickname || post.author_name;
   const avatarSeed = (
     post.profiles?.avatar_seed || post.author_name
@@ -202,9 +201,8 @@ export default function PostCard({
 
       <PostInteractions
         postId={post.id}
-        likesCount={post.likes?.length || 0}
+        reactions={post.reactions || []}
         comments={post.comments || []}
-        isLiked={!!isLiked}
         isLoggedIn={!!user}
         currentUserId={user?.id ?? null}
         onCommentDeleted={

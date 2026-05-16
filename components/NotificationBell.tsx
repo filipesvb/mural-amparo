@@ -160,6 +160,8 @@ function describeNotification(type: NotificationType, hasComment: boolean) {
   switch (type) {
     case "like":
       return { action: "curtiu seu recado", icon: "❤️" };
+    case "reaction":
+      return { action: "reagiu ao seu recado", icon: "😊" };
     case "comment":
       return { action: "comentou no seu recado", icon: "💬" };
     case "mention":

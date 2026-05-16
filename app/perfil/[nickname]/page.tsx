@@ -40,7 +40,7 @@ export default async function PerfilPublicoPage({
       `
       *,
       profiles (nickname, avatar_seed),
-      likes (user_id),
+      reactions (user_id, emoji),
       comments (*)
     `,
     )
@@ -49,8 +49,8 @@ export default async function PerfilPublicoPage({
 
   const postsList: PostWithRelations[] = posts ?? [];
   const totalPosts = postsList.length;
-  const totalLikesRecebidas = postsList.reduce(
-    (acc, p) => acc + (p.likes?.length ?? 0),
+  const totalReacoesRecebidas = postsList.reduce(
+    (acc, p) => acc + (p.reactions?.length ?? 0),
     0,
   );
 
@@ -143,11 +143,11 @@ export default async function PerfilPublicoPage({
                 </span>
               </span>
               <span className="bg-white retro-border px-3 py-1">
-                ❤️ {totalLikesRecebidas}{" "}
+                😊 {totalReacoesRecebidas}{" "}
                 <span className="font-normal opacity-70">
-                  {totalLikesRecebidas === 1
-                    ? "curtida recebida"
-                    : "curtidas recebidas"}
+                  {totalReacoesRecebidas === 1
+                    ? "reação recebida"
+                    : "reações recebidas"}
                 </span>
               </span>
             </div>

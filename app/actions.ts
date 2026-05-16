@@ -14,6 +14,7 @@ import {
   ALLOWED_POST_IMAGE_TYPES,
   postImageExtension,
 } from "@/utils/storage";
+import { isReactionEmoji, type ReactionEmoji } from "@/utils/reactions";
 
 export type SearchProfileHit = {
   nickname: string;
@@ -94,7 +95,7 @@ export async function loadMorePosts(
       `
       *,
       profiles (nickname, avatar_seed),
-      likes (user_id),
+      reactions (user_id, emoji),
       comments (*)
     `,
     )
@@ -320,25 +321,36 @@ export async function signOut() {
   redirect("/");
 }
 
-export async function toggleLike(postId: number) {
+export async function setReaction(postId: number, emoji: ReactionEmoji) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  // Verifica se o like já existe
-  const { data: existingLike } = await supabase
-    .from("likes")
-    .select()
+  if (!isReactionEmoji(emoji)) return;
+
+  // Reação atual do morador neste recado (no máx. uma — unique post_id+user_id)
+  const { data: existing } = await supabase
+    .from("reactions")
+    .select("id, emoji")
     .eq("post_id", postId)
     .eq("user_id", user.id)
     .single();
 
-  if (existingLike) {
-    await supabase.from("likes").delete().eq("id", existingLike.id);
+  if (!existing) {
+    await supabase
+      .from("reactions")
+      .insert({ post_id: postId, user_id: user.id, emoji });
+  } else if (existing.emoji === emoji) {
+    // Mesmo emoji => toggle off
+    await supabase.from("reactions").delete().eq("id", existing.id);
   } else {
-    await supabase.from("likes").insert({ post_id: postId, user_id: user.id });
+    // Troca de emoji => update (não gera notificação nova)
+    await supabase
+      .from("reactions")
+      .update({ emoji })
+      .eq("id", existing.id);
   }
 
   revalidatePath("/");

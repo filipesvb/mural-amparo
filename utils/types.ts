@@ -6,10 +6,13 @@ export type Profile = {
   created_at?: string | null;
 };
 
-export type Like = {
+import type { ReactionEmoji } from "./reactions";
+
+export type Reaction = {
   id: number;
   post_id: number;
   user_id: string;
+  emoji: ReactionEmoji;
 };
 
 export type Comment = {
@@ -32,11 +35,15 @@ export type Post = {
 
 export type PostWithRelations = Post & {
   profiles: Pick<Profile, "nickname" | "avatar_seed"> | null;
-  likes: Pick<Like, "user_id">[];
+  reactions: Pick<Reaction, "user_id" | "emoji">[];
   comments: Comment[];
 };
 
-export type NotificationType = "like" | "comment" | "mention";
+export type NotificationType =
+  | "like"
+  | "comment"
+  | "mention"
+  | "reaction";
 
 export type Notification = {
   id: number;

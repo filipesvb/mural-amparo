@@ -1,60 +1,78 @@
 "use client";
 
 import {
-  toggleLike,
+  setReaction,
   addComment,
   editComment,
   deleteComment,
 } from "@/app/actions";
 import { useEffect, useState, useTransition } from "react";
-import type { Comment } from "@/utils/types";
+import type { Comment, Reaction } from "@/utils/types";
+import { REACTION_EMOJIS } from "@/utils/reactions";
 import { EDIT_WINDOW_MS } from "@/utils/feed";
 import { RenderWithMentions } from "./MentionsProvider";
 import MentionInput from "./MentionInput";
 
 export function PostInteractions({
   postId,
-  likesCount,
+  reactions,
   comments,
-  isLiked,
   isLoggedIn,
   currentUserId,
   onCommentDeleted,
 }: {
   postId: number;
-  likesCount: number;
+  reactions: Pick<Reaction, "user_id" | "emoji">[];
   comments: Comment[];
-  isLiked: boolean;
   isLoggedIn: boolean;
   currentUserId: string | null;
   onCommentDeleted?: (commentId: number) => void;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [commentError, setCommentError] = useState("");
-  const [isLikePending, startLikeTransition] = useTransition();
+  const [isReactPending, startReactTransition] = useTransition();
+
+  const myReaction = currentUserId
+    ? (reactions.find((r) => r.user_id === currentUserId)?.emoji ?? null)
+    : null;
 
   return (
     <div className="mt-4 pt-3 border-t border-mural-dark/10">
-      <div className="flex gap-4 text-xs font-bold">
-        <button
-          onClick={() => {
-            if (isLoggedIn) {
-              startLikeTransition(() => toggleLike(postId));
-            }
-          }}
-          className={`
-            flex items-center gap-1 transition-all
-            ${isLikePending ? "opacity-30 scale-95 cursor-wait" : "retro-button-active"}
-            ${isLiked ? "text-red-600" : "opacity-60"}
-          `}
-          disabled={!isLoggedIn || isLikePending}
-        >
-          {isLikePending ? "⏳" : isLiked ? "❤️" : "🤍"} {likesCount} Curtidas
-        </button>
+      <div className="flex flex-wrap gap-1 text-xs font-bold items-center">
+        {REACTION_EMOJIS.map((emoji) => {
+          const count = reactions.filter((r) => r.emoji === emoji).length;
+          const mine = myReaction === emoji;
+          return (
+            <button
+              key={emoji}
+              onClick={() => {
+                if (isLoggedIn) {
+                  startReactTransition(() => setReaction(postId, emoji));
+                }
+              }}
+              disabled={!isLoggedIn || isReactPending}
+              title={
+                isLoggedIn
+                  ? mine
+                    ? "Remover sua reação"
+                    : "Reagir"
+                  : "Entre para reagir"
+              }
+              className={`
+                flex items-center gap-1 px-2 py-1 transition-all
+                ${isReactPending ? "opacity-30 cursor-wait" : "retro-button-active"}
+                ${mine ? "retro-border bg-mural-creme" : "opacity-50 hover:opacity-100"}
+              `}
+            >
+              <span>{emoji}</span>
+              {count > 0 && <span>{count}</span>}
+            </button>
+          );
+        })}
 
         <button
           onClick={() => setShowComments(!showComments)}
-          className="opacity-60 hover:underline flex items-center gap-1"
+          className="opacity-60 hover:underline flex items-center gap-1 px-2 py-1"
         >
           💬 {comments.length} Comentários
         </button>

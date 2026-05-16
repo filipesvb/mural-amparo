@@ -25,7 +25,7 @@ export default async function Home() {
       `
       *,
       profiles (nickname, avatar_seed),
-      likes (user_id),
+      reactions (user_id, emoji),
       comments (*)
     `,
     )
