@@ -28,11 +28,8 @@ export default async function Home({
   const supabase = await createClient();
 
   const { cat, feed } = await searchParams;
-  const activeCategory: PostCategory | null = isPostCategory(cat)
-    ? cat
-    : null;
-  const activeFeed: "seguindo" | null =
-    feed === "seguindo" ? "seguindo" : null;
+  const activeCategory: PostCategory | null = isPostCategory(cat) ? cat : null;
+  const activeFeed: "seguindo" | null = feed === "seguindo" ? "seguindo" : null;
 
   const {
     data: { user },
@@ -45,9 +42,7 @@ export default async function Home({
 
   // IDs que o usuário segue: usados na query e no filtro de realtime
   const followingIds =
-    activeFeed === "seguindo" && user
-      ? await fetchFollowingIds(user.id)
-      : null;
+    activeFeed === "seguindo" && user ? await fetchFollowingIds(user.id) : null;
 
   let posts: PostWithRelations[] | null = [];
   let error: { message: string } | null = null;
@@ -56,16 +51,14 @@ export default async function Home({
   if (activeFeed === "seguindo" && (followingIds?.length ?? 0) === 0) {
     posts = [];
   } else {
-    let postsQuery = supabase
-      .from("posts")
-      .select(
-        `
+    let postsQuery = supabase.from("posts").select(
+      `
         *,
         profiles (nickname, avatar_seed),
         reactions (user_id, emoji),
         comments (*)
       `,
-      );
+    );
 
     if (followingIds) {
       postsQuery = postsQuery.in("user_id", followingIds);
@@ -104,7 +97,7 @@ export default async function Home({
     <main className="h-screen p-4 md:p-8 flex justify-center items-center">
       <div className="w-full max-w-6xl h-full bg-mural-creme retro-border rounded-xl flex flex-col overflow-hidden">
         <header className="wood-header shrink-0 p-4 border-b-2 flex justify-between items-center">
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-2 ">
             <Image
               src={"/construcao-amparo-logo.png"}
               width={120}
