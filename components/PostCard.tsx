@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 import type { PostWithRelations } from "@/utils/types";
 import { EDIT_WINDOW_MS } from "@/utils/feed";
 import { postImageUrl } from "@/utils/storage";
+import { categoryMeta } from "@/utils/categories";
 import { deletePost, editPost } from "@/app/actions";
 import { PostInteractions } from "./Interactions";
 import { RenderWithMentions } from "./MentionsProvider";
@@ -36,6 +37,8 @@ export default function PostCard({
   const authorHref = post.profiles?.nickname
     ? `/perfil/${encodeURIComponent(post.profiles.nickname)}`
     : null;
+
+  const cat = categoryMeta(post.category);
 
   const isOwner = !!user && user.id === post.user_id;
   const createdAtMs = new Date(post.created_at).getTime();
@@ -111,6 +114,9 @@ export default function PostCard({
                 minute: "2-digit",
               })}
             </p>
+            <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold bg-mural-creme retro-border">
+              {cat.icon} {cat.label}
+            </span>
           </div>
         </div>
 

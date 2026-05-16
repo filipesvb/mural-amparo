@@ -7,6 +7,7 @@ export type Profile = {
 };
 
 import type { ReactionEmoji } from "./reactions";
+import type { PostCategory } from "./categories";
 
 export type Reaction = {
   id: number;
@@ -31,6 +32,7 @@ export type Post = {
   user_id: string;
   created_at: string;
   image_path: string | null;
+  category: PostCategory;
 };
 
 export type PostWithRelations = Post & {

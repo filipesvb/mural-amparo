@@ -11,15 +11,30 @@ import NotificationBell from "@/components/NotificationBell";
 import SearchBar from "@/components/SearchBar";
 import { MentionsProvider } from "@/components/MentionsProvider";
 import type { PostWithRelations } from "@/utils/types";
+import {
+  POST_CATEGORIES,
+  isPostCategory,
+  type PostCategory,
+} from "@/utils/categories";
+import Image from "next/image";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ cat?: string }>;
+}) {
   const supabase = await createClient();
+
+  const { cat } = await searchParams;
+  const activeCategory: PostCategory | null = isPostCategory(cat)
+    ? cat
+    : null;
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: posts, error } = await supabase
+  let postsQuery = supabase
     .from("posts")
     .select(
       `
@@ -28,7 +43,13 @@ export default async function Home() {
       reactions (user_id, emoji),
       comments (*)
     `,
-    )
+    );
+
+  if (activeCategory) {
+    postsQuery = postsQuery.eq("category", activeCategory);
+  }
+
+  const { data: posts, error } = await postsQuery
     .order("created_at", { ascending: false })
     .limit(FEED_PAGE_SIZE);
 
@@ -54,11 +75,15 @@ export default async function Home() {
   return (
     <main className="h-screen p-4 md:p-8 flex justify-center items-center">
       <div className="w-full max-w-6xl h-full bg-mural-creme retro-border rounded-xl flex flex-col overflow-hidden">
-        <header className="wood-header-footer shrink-0 p-4 border-b-2 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-mural-creme retro-border flex items-center justify-center">
-              🕒
-            </div>
+        <header className="bg-[#4A3525] shrink-0 p-4 border-b-2 flex justify-between items-center">
+          <div className="flex items-baseline gap-2">
+            <Image
+              className=""
+              src={"/construcao-amparo-logo.png"}
+              width={120}
+              height={30}
+              alt="Imagem construção Amparo-SP"
+            />
             <h1 className="text-2xl font-bold text-mural-creme tracking-tight">
               Mural Amparo
             </h1>
@@ -131,6 +156,32 @@ export default async function Home() {
           <section className="flex-1 p-4 space-y-4 bg-white/50 overflow-y-auto">
             <CreatePostWidget user={user} profile={profile} />
 
+            <nav className="flex flex-wrap gap-2 text-xs font-bold">
+              <Link
+                href="/"
+                className={`px-3 py-1 retro-border retro-button-active ${
+                  activeCategory === null
+                    ? "bg-mural-brown text-white"
+                    : "bg-mural-creme text-mural-dark hover:bg-white"
+                }`}
+              >
+                🗂️ Todos
+              </Link>
+              {POST_CATEGORIES.map((c) => (
+                <Link
+                  key={c.value}
+                  href={`/?cat=${c.value}`}
+                  className={`px-3 py-1 retro-border retro-button-active ${
+                    activeCategory === c.value
+                      ? "bg-mural-brown text-white"
+                      : "bg-mural-creme text-mural-dark hover:bg-white"
+                  }`}
+                >
+                  {c.icon} {c.label}
+                </Link>
+              ))}
+            </nav>
+
             {error && (
               <div className="bg-red-100 border-2 border-red-800 p-4 text-red-800 retro-border">
                 Erro ao carregar os recados de Amparo. Tente novamente mais
@@ -139,12 +190,19 @@ export default async function Home() {
             )}
 
             <MentionsProvider initialValidMentions={initialValidMentions}>
-              <RealtimeFeed initialPosts={postsList} user={user} />
+              <RealtimeFeed
+                key={activeCategory ?? "all"}
+                initialPosts={postsList}
+                user={user}
+                activeCategory={activeCategory}
+              />
             </MentionsProvider>
 
             {postsList.length === 0 && (
               <div className="text-center p-8 opacity-50 italic">
-                Nenhum recado por aqui ainda... Seja o primeiro!
+                {activeCategory
+                  ? "Nenhum recado nesta categoria ainda."
+                  : "Nenhum recado por aqui ainda... Seja o primeiro!"}
               </div>
             )}
           </section>

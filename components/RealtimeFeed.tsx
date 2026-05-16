@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type { Comment, Post, PostWithRelations } from "@/utils/types";
 import type { ReactionEmoji } from "@/utils/reactions";
+import type { PostCategory } from "@/utils/categories";
 import { FEED_PAGE_SIZE } from "@/utils/feed";
 import { loadMorePosts } from "@/app/actions";
 import PostCard from "./PostCard";
@@ -12,9 +13,11 @@ import PostCard from "./PostCard";
 export default function RealtimeFeed({
   initialPosts,
   user,
+  activeCategory,
 }: {
   initialPosts: PostWithRelations[];
   user: User | null;
+  activeCategory: PostCategory | null;
 }) {
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(
@@ -32,6 +35,8 @@ export default function RealtimeFeed({
         { event: "INSERT", schema: "public", table: "posts" },
         async (payload) => {
           const newPost = payload.new as Post;
+          // Filtro de categoria ativo: ignora inserts de outra seção
+          if (activeCategory && newPost.category !== activeCategory) return;
           const { data: profile } = await supabase
             .from("profiles")
             .select("nickname, avatar_seed")
@@ -191,7 +196,7 @@ export default function RealtimeFeed({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase]);
+  }, [supabase, activeCategory]);
 
   const handleCommentDeleted = useCallback(
     (postId: number, commentId: number) => {
@@ -213,11 +218,11 @@ export default function RealtimeFeed({
     if (isLoading || !hasMore || posts.length === 0) return;
     setIsLoading(true);
     const cursor = posts[posts.length - 1].created_at;
-    const next = await loadMorePosts(cursor);
+    const next = await loadMorePosts(cursor, activeCategory);
     setPosts((prev) => [...prev, ...next]);
     if (next.length < FEED_PAGE_SIZE) setHasMore(false);
     setIsLoading(false);
-  }, [isLoading, hasMore, posts]);
+  }, [isLoading, hasMore, posts, activeCategory]);
 
   useEffect(() => {
     if (!hasMore) return;

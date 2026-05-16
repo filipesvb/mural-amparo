@@ -15,6 +15,11 @@ import {
   postImageExtension,
 } from "@/utils/storage";
 import { isReactionEmoji, type ReactionEmoji } from "@/utils/reactions";
+import {
+  isPostCategory,
+  DEFAULT_CATEGORY,
+  type PostCategory,
+} from "@/utils/categories";
 
 export type SearchProfileHit = {
   nickname: string;
@@ -87,9 +92,10 @@ export async function searchAll(query: string): Promise<SearchResults> {
 
 export async function loadMorePosts(
   beforeCreatedAt: string,
+  category?: PostCategory | null,
 ): Promise<PostWithRelations[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("posts")
     .select(
       `
@@ -99,7 +105,11 @@ export async function loadMorePosts(
       comments (*)
     `,
     )
-    .lt("created_at", beforeCreatedAt)
+    .lt("created_at", beforeCreatedAt);
+
+  if (category) query = query.eq("category", category);
+
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(FEED_PAGE_SIZE);
 
@@ -120,6 +130,9 @@ export async function createPost(formData: FormData) {
 
   const content = ((formData.get("content") as string) ?? "").trim();
   const author_name = formData.get("author_name") as string; // Mantemos por segurança/legado
+
+  const categoryRaw = formData.get("category");
+  const category = isPostCategory(categoryRaw) ? categoryRaw : DEFAULT_CATEGORY;
 
   const imageFile = formData.get("image");
   const hasImage = imageFile instanceof File && imageFile.size > 0;
@@ -162,6 +175,7 @@ export async function createPost(formData: FormData) {
       author_name,
       user_id: user.id,
       image_path,
+      category,
     },
   ]);
 
@@ -413,11 +427,21 @@ export async function deletePost(postId: number) {
     return { error: "Não foi possível excluir o recado." };
   }
 
-  // Remove o arquivo do Storage depois que a linha some (best-effort)
+  // Remove o arquivo do Storage depois que a linha some (best-effort).
+  // A RLS de DELETE em storage.objects não retorna erro quando bloqueia:
+  // o Supabase só devolve data: [] (zero objetos removidos). Por isso
+  // checamos o data, não só o error.
   if (post.image_path) {
-    await supabase.storage
+    const { data: removed, error: removeError } = await supabase.storage
       .from(POST_IMAGES_BUCKET)
       .remove([post.image_path]);
+    if (removeError || !removed || removed.length === 0) {
+      console.error(
+        "Falha ao remover imagem do Storage (verifique a policy de DELETE):",
+        post.image_path,
+        removeError,
+      );
+    }
   }
 
   revalidatePath("/");

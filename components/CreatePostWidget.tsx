@@ -9,6 +9,7 @@ import {
   ALLOWED_POST_IMAGE_TYPES,
   MAX_POST_IMAGE_BYTES,
 } from "@/utils/storage";
+import { POST_CATEGORIES, DEFAULT_CATEGORY } from "@/utils/categories";
 import MentionInput from "./MentionInput";
 
 export default function CreatePostWidget({
@@ -136,6 +137,21 @@ export default function CreatePostWidget({
           rows={3}
           className="w-full p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none text-sm resize-none"
         />
+
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <span>Categoria:</span>
+          <select
+            name="category"
+            defaultValue={DEFAULT_CATEGORY}
+            className="flex-1 p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none text-sm"
+          >
+            {POST_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.icon} {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         {previewUrl && (
           <div className="relative inline-block">
