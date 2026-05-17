@@ -115,8 +115,8 @@ export default async function Home({
   const trending = await fetchTrendingHashtags(6);
 
   return (
-    <main className="min-h-screen p-3 md:p-6 flex justify-center items-start">
-      <div className="w-full max-w-6xl bg-mural-creme border border-mural-line rounded-2xl shadow-md flex flex-col overflow-hidden">
+    <main className="h-screen overflow-hidden p-3 md:p-6 flex justify-center items-start">
+      <div className="w-full max-w-6xl bg-mural-creme border border-mural-line rounded-2xl shadow-md flex flex-col overflow-hidden h-full">
         <header className="wood-header shrink-0 px-5 py-4 flex items-center gap-4">
           <div className="flex items-center gap-3 shrink-0">
             <div className="bg-mural-creme rounded-xl p-1.5 shadow-sm">
@@ -182,7 +182,7 @@ export default async function Home({
           initialFeed={initialFeed}
           isLoggedIn={!!user}
         >
-          <div className="flex flex-1 flex-col md:flex-row">
+          <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
             <aside className="w-full md:w-60 shrink-0 p-4 space-y-6 bg-mural-panel/60 hidden md:block">
               <SidebarNav showAdmin={isAdmin(asRole(profile?.role))} />
 
@@ -210,7 +210,7 @@ export default async function Home({
               </div>
             </aside>
 
-            <section className="flex-1 p-4 space-y-4 min-w-0">
+            <section className="flex-1 p-4 space-y-4 min-w-0 overflow-y-auto min-h-0">
               <CreatePostWidget user={user} profile={profile} />
 
               <FeedHeader counts={counts} />
