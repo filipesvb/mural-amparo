@@ -10,16 +10,23 @@ const idleClass = "text-mural-ink/80 hover:bg-mural-brown/10";
 
 export default function SidebarNav({
   showAdmin = false,
+  onSelect,
 }: {
   showAdmin?: boolean;
+  onSelect?: () => void;
 }) {
   const { feed, setFeed } = useFeedFilter();
+
+  const handleFeedChange = (newFeed: "seguindo" | null) => {
+    setFeed(newFeed);
+    onSelect?.();
+  };
 
   return (
     <nav className="space-y-1">
       <button
         type="button"
-        onClick={() => setFeed(null)}
+        onClick={() => handleFeedChange(null)}
         className={`${baseClass} ${feed === null ? activeClass : idleClass}`}
       >
         <span>📰</span>
@@ -27,7 +34,7 @@ export default function SidebarNav({
       </button>
       <button
         type="button"
-        onClick={() => setFeed("seguindo")}
+        onClick={() => handleFeedChange("seguindo")}
         className={`${baseClass} ${
           feed === "seguindo" ? activeClass : idleClass
         }`}
@@ -35,20 +42,36 @@ export default function SidebarNav({
         <span>👥</span>
         Seguindo
       </button>
-      <Link href="/perfil" className={`${baseClass} ${idleClass}`}>
+      <Link
+        href="/perfil"
+        className={`${baseClass} ${idleClass}`}
+        onClick={onSelect}
+      >
         <span>👤</span>
         Seu Perfil
       </Link>
-      <Link href="/perfil/salvos" className={`${baseClass} ${idleClass}`}>
+      <Link
+        href="/perfil/salvos"
+        className={`${baseClass} ${idleClass}`}
+        onClick={onSelect}
+      >
         <span>🔖</span>
         Salvos
       </Link>
-      <Link href="#" className={`${baseClass} ${idleClass}`}>
+      <Link
+        href="#"
+        className={`${baseClass} ${idleClass}`}
+        onClick={onSelect}
+      >
         <span>🔗</span>
         Links Úteis
       </Link>
       {showAdmin && (
-        <Link href="/admin" className={`${baseClass} ${idleClass}`}>
+        <Link
+          href="/admin"
+          className={`${baseClass} ${idleClass}`}
+          onClick={onSelect}
+        >
           <span>⭐</span>
           Painel do Admin
         </Link>
