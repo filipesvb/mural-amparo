@@ -32,10 +32,10 @@ export default function FollowButton({
     <button
       onClick={handleClick}
       disabled={isPending}
-      className={`px-4 py-2 text-sm font-bold retro-border retro-button-active shrink-0 disabled:opacity-50 ${
+      className={`px-4 py-2 text-sm font-bold rounded-lg border retro-button-active shrink-0 disabled:opacity-50 ${
         isFollowing
-          ? "bg-mural-creme text-mural-dark"
-          : "bg-mural-brown text-white"
+          ? "bg-mural-creme text-mural-ink border-mural-line"
+          : "bg-mural-brown text-white border-mural-brown"
       }`}
     >
       {isFollowing ? "✓ Seguindo" : "+ Seguir"}
