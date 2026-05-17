@@ -15,30 +15,46 @@ import FeedHeader from "@/components/FeedHeader";
 import SidebarNav from "@/components/SidebarNav";
 import RealtimeFeed from "@/components/RealtimeFeed";
 import MobileMenuButton from "@/components/MobileMenuButton";
-import type { PostWithRelations } from "@/utils/types";
+import type { PostWithRelations, NotificationWithActor, Profile } from "@/utils/types";
 import type { Role } from "@/utils/roles";
+import type { PostCategory } from "@/utils/categories";
 import { isAdmin } from "@/utils/roles";
 
 const UPCOMING_EVENTS = [
-  { day: "23", month: "MAI", title: "Feirão da Praça", place: "Praça Pádua Sales · 8h" },
-  { day: "07", month: "JUN", title: "Festival de Inverno", place: "Centro Histórico · 18h" },
-  { day: "15", month: "JUN", title: "Mutirão da Limpeza", place: "Rio Camanducaia · 7h" },
+  {
+    day: "23",
+    month: "MAI",
+    title: "Feirão da Praça",
+    place: "Praça Pádua Sales · 8h",
+  },
+  {
+    day: "07",
+    month: "JUN",
+    title: "Festival de Inverno",
+    place: "Centro Histórico · 18h",
+  },
+  {
+    day: "15",
+    month: "JUN",
+    title: "Mutirão da Limpeza",
+    place: "Rio Camanducaia · 7h",
+  },
 ];
 
 interface HomePageLayoutProps {
   user: User | null;
-  profile: any;
+  profile: Profile | null;
   posts: PostWithRelations[];
   counts: ScopeCounts;
-  initialCategory: string | null;
+  initialCategory: PostCategory | null;
   initialFeed: "seguindo" | null;
-  initialNotifications: any[];
+  initialNotifications: NotificationWithActor[];
   unreadCount: number;
-  initialValidMentions: any[];
-  trending: any[];
+  initialValidMentions: string[];
+  trending: Array<{ tag: string }>;
   viewerRole?: Role | null;
   followingIds: string[] | null;
-  error: any;
+  error: Error | null;
 }
 
 export default function HomePageLayout({
@@ -98,7 +114,7 @@ export default function HomePageLayout({
               Olá,{" "}
               <span className="font-bold text-yellow-200">
                 {user
-                  ? profile?.nickname ?? user.email?.split("@")[0]
+                  ? (profile?.nickname ?? user.email?.split("@")[0])
                   : "visitante"}
               </span>
             </span>
@@ -133,10 +149,8 @@ export default function HomePageLayout({
 
             {/* Left sidebar */}
             <aside
-              className={`fixed md:relative left-0 top-0 w-64 md:w-60 shrink-0 p-4 space-y-6 bg-mural-panel/60 transition-all duration-300 z-40 overflow-y-auto md:overflow-visible ${
-                isMenuOpen
-                  ? "h-full"
-                  : "hidden md:flex md:flex-col"
+              className={`fixed md:relative left-0 top-0 w-64 md:w-60 shrink-0 p-4 space-y-6 bg-mural-panel/90 transition-all duration-300 z-40 overflow-y-auto md:overflow-visible ${
+                isMenuOpen ? "h-full" : "hidden md:flex md:flex-col"
               }`}
             >
               {/* Mobile header com botão fechar */}
