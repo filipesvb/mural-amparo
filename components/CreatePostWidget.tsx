@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 import { createPost } from "@/app/actions";
 import type { User } from "@supabase/supabase-js";
@@ -21,10 +21,11 @@ export default function CreatePostWidget({
   user: User | null;
   profile: Profile | null;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   function clearImage() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -39,9 +40,7 @@ export default function CreatePostWidget({
       clearImage();
       return;
     }
-    if (
-      !(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)
-    ) {
+    if (!(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)) {
       setError("Formato inválido. Use JPG, PNG, WebP ou GIF.");
       clearImage();
       return;
@@ -58,8 +57,26 @@ export default function CreatePostWidget({
   function reset() {
     clearImage();
     setError("");
-    setIsOpen(false);
   }
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const textareaContainer = event.currentTarget;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsFocused(false);
+      }
+    }
+
+    if (isFocused) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [isFocused]);
 
   const avatar = (
     <div className="w-10 h-10 rounded-lg overflow-hidden ring-1 ring-mural-line bg-mural-creme shrink-0">
@@ -78,32 +95,18 @@ export default function CreatePostWidget({
     return (
       <a
         href="/login"
-        className="soft-card p-4 flex items-center justify-between gap-2 hover:bg-mural-creme transition-colors"
+        className="soft-card p-3 md:p-4 flex items-center justify-between gap-2 hover:bg-mural-creme transition-colors"
       >
-        <span className="text-mural-ink/45 italic">
-          Entre para postar um recado em Amparo...
-        </span>
-        <span className="bg-mural-brown text-white px-4 py-1.5 rounded-lg text-sm font-bold">
+        <div className="flex items-center gap-3">
+          {avatar}
+          <span className="text-mural-ink/45 italic text-sm md:text-base">
+            Entre para postar um recado...
+          </span>
+        </div>
+        <span className="bg-mural-brown text-white px-4 py-2 rounded-lg text-xs md:text-sm font-bold shrink-0">
           🔑 Entrar
         </span>
       </a>
-    );
-  }
-
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="soft-card p-4 w-full flex items-center gap-3 text-left hover:bg-mural-creme transition-colors"
-      >
-        {avatar}
-        <span className="flex-1 text-mural-ink/45 italic">
-          O que está acontecendo, {profile?.nickname}?
-        </span>
-        <span className="bg-mural-brown text-white px-4 py-1.5 rounded-lg text-sm font-bold shrink-0">
-          + Escrever
-        </span>
-      </button>
     );
   }
 
@@ -118,24 +121,32 @@ export default function CreatePostWidget({
         }
         reset();
       }}
-      className="soft-card p-4"
+      className="soft-card p-3 md:p-4 space-y-3"
     >
       <HoneypotField />
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-flex-start gap-3">
         {avatar}
-        <h3 className="flex-1 font-bold text-mural-ink">
-          {profile?.nickname || user.email?.split("@")[0]}
-        </h3>
-        <button
-          type="button"
-          onClick={reset}
-          className="text-mural-ink/40 hover:text-mural-ink text-sm font-bold"
+        <div
+          className="flex-1"
+          onFocus={() => setIsFocused(true)}
         >
-          ✕
-        </button>
+          <MentionInput
+            as="textarea"
+            name="content"
+            placeholder={`O que está acontecendo, ${profile?.nickname}?`}
+            rows={1}
+            className="w-full p-3 rounded-lg focus:outline-none text-sm"
+          />
+        </div>
       </div>
 
-      <div className="space-y-3">
+      <div
+        ref={containerRef}
+        onFocus={() => setIsFocused(true)}
+        className={`border-t border-dashed border-mural-line pt-3 space-y-3 ${
+          isFocused ? "block" : "hidden"
+        } md:block`}
+      >
         {error && (
           <div className="bg-red-100 border border-red-300 rounded-lg p-2 text-red-800 text-xs font-bold">
             ⚠️ {error}
@@ -145,14 +156,6 @@ export default function CreatePostWidget({
           type="hidden"
           name="author_name"
           value={profile?.nickname || user.email?.split("@")[0]}
-        />
-
-        <MentionInput
-          as="textarea"
-          name="content"
-          placeholder="Digite seu recado aqui... use @ para mencionar moradores"
-          rows={3}
-          className="w-full p-3 bg-mural-creme border border-mural-line rounded-lg focus:outline-none focus:ring-2 focus:ring-mural-brown/30 text-sm resize-none"
         />
 
         {previewUrl && (
@@ -175,10 +178,10 @@ export default function CreatePostWidget({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <label
             title="Anexar imagem"
-            className="flex items-center justify-center w-9 h-9 rounded-lg bg-mural-creme border border-mural-line hover:bg-white cursor-pointer"
+            className="flex items-center justify-center w-9 h-9 rounded-lg bg-mural-creme border border-mural-line hover:bg-white cursor-pointer text-lg transition-colors"
           >
             🖼️
             <input
@@ -194,7 +197,7 @@ export default function CreatePostWidget({
           <select
             name="category"
             defaultValue={DEFAULT_CATEGORY}
-            className="px-3 py-2 bg-mural-creme border border-mural-line rounded-lg focus:outline-none text-sm"
+            className="px-2 py-1 text-sm bg-mural-creme border border-mural-line rounded-lg focus:outline-none"
           >
             {POST_CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
@@ -205,7 +208,7 @@ export default function CreatePostWidget({
 
           <button
             type="submit"
-            className="ml-auto bg-mural-brown text-white px-6 py-2 font-bold rounded-lg retro-button-active"
+            className="ml-auto bg-mural-brown text-white px-4 md:px-6 py-2 text-sm md:text-base font-bold rounded-lg retro-button-active shrink-0"
           >
             + Escrever
           </button>

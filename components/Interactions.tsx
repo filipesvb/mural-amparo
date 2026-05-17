@@ -103,43 +103,43 @@ export function PostInteractions({
 
   return (
     <div className="mt-4 pt-3 border-t border-mural-line">
-      <div className="flex flex-wrap gap-1.5 text-xs font-bold items-center">
-        {REACTION_EMOJIS.map((emoji) => {
-          const count = reactions.filter((r) => r.emoji === emoji).length;
-          const mine = myReaction === emoji;
-          return (
-            <button
-              key={emoji}
-              onClick={() => {
-                if (!isLoggedIn || !currentUserId) return;
-                // Aplica já no estado autoritativo (instantâneo, sem
-                // flicker) e persiste em background.
-                onReactionChange?.(postId, currentUserId, emoji);
-                startReactTransition(() => {
-                  setReaction(postId, emoji);
-                });
-              }}
-              disabled={!isLoggedIn}
-              title={
-                isLoggedIn
-                  ? mine
-                    ? "Remover sua reação"
-                    : "Reagir"
-                  : "Entre para reagir"
-              }
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 transition-colors ${
-                mine
-                  ? "bg-mural-brown/15 border-mural-brown text-mural-ink"
-                  : "bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme"
-              }`}
-            >
-              <span>{emoji}</span>
-              {count > 0 && <span>{count}</span>}
-            </button>
-          );
-        })}
+      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-1.5 text-xs font-bold">
+        <div className="flex flex-wrap gap-1 md:gap-1.5 items-center">
+          {REACTION_EMOJIS.map((emoji) => {
+            const count = reactions.filter((r) => r.emoji === emoji).length;
+            const mine = myReaction === emoji;
+            return (
+              <button
+                key={emoji}
+                onClick={() => {
+                  if (!isLoggedIn || !currentUserId) return;
+                  onReactionChange?.(postId, currentUserId, emoji);
+                  startReactTransition(() => {
+                    setReaction(postId, emoji);
+                  });
+                }}
+                disabled={!isLoggedIn}
+                title={
+                  isLoggedIn
+                    ? mine
+                      ? "Remover sua reação"
+                      : "Reagir"
+                    : "Entre para reagir"
+                }
+                className={`flex items-center gap-1 rounded-full border px-2 md:px-2.5 py-1 transition-colors text-[11px] md:text-xs ${
+                  mine
+                    ? "bg-mural-brown/15 border-mural-brown text-mural-ink"
+                    : "bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme"
+                }`}
+              >
+                <span className="text-sm md:text-base">{emoji}</span>
+                {count > 0 && <span className="hidden sm:inline">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="md:ml-auto flex items-center gap-2 md:gap-1">
           <button
             onClick={handleBookmark}
             disabled={!isLoggedIn}
@@ -150,13 +150,13 @@ export function PostInteractions({
                   : "Salvar recado"
                 : "Entre para salvar"
             }
-            className={`flex items-center gap-1 rounded-full border px-2.5 py-1 transition-colors ${
+            className={`flex items-center gap-1 rounded-full border px-2 md:px-2.5 py-1 transition-colors text-[11px] md:text-xs ${
               isBookmarked
                 ? "bg-mural-brown/15 border-mural-brown text-mural-ink"
                 : "bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme"
             }`}
           >
-            <span>🔖</span>
+            <span className="text-sm md:text-base">🔖</span>
             <span className="hidden sm:inline">
               {isBookmarked ? "Salvo" : "Salvar"}
             </span>
@@ -164,10 +164,14 @@ export function PostInteractions({
 
           <button
             onClick={() => setShowComments(!showComments)}
-            className="text-mural-ink/50 hover:text-mural-ink flex items-center gap-1 px-2 py-1"
+            className="text-mural-ink/50 hover:text-mural-ink flex items-center gap-1 px-2 py-1 text-[11px] md:text-xs"
           >
-            💬 {optimisticComments.length}{" "}
-            {optimisticComments.length === 1 ? "comentário" : "comentários"}
+            <span className="text-sm md:text-base">💬</span>
+            <span className="hidden sm:inline">
+              {optimisticComments.length}{" "}
+              {optimisticComments.length === 1 ? "comentário" : "comentários"}
+            </span>
+            <span className="sm:hidden">{optimisticComments.length}</span>
           </button>
         </div>
       </div>
