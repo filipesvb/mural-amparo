@@ -1,40 +1,57 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type { Comment, Post, PostWithRelations } from "@/utils/types";
-import type { ReactionEmoji } from "@/utils/reactions";
-import type { PostCategory } from "@/utils/categories";
+import {
+  applyReactionToggle,
+  removeReactionFor,
+  setReactionFor,
+  type ReactionEmoji,
+} from "@/utils/reactions";
 import { FEED_PAGE_SIZE } from "@/utils/feed";
+import type { Role } from "@/utils/roles";
 import { loadMorePosts } from "@/app/actions";
+import { useFeedFilter } from "./FeedFilterProvider";
 import PostCard from "./PostCard";
 
 export default function RealtimeFeed({
   initialPosts,
   user,
-  activeCategory,
-  feedScope,
+  viewerRole,
   followingIds,
 }: {
   initialPosts: PostWithRelations[];
   user: User | null;
-  activeCategory: PostCategory | null;
-  feedScope: "seguindo" | null;
+  viewerRole?: Role | null;
   followingIds: string[] | null;
 }) {
+  const { category, feed } = useFeedFilter();
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(
     initialPosts.length === FEED_PAGE_SIZE,
   );
   const [isLoading, setIsLoading] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  // Ref evita re-subscrever o canal a cada render (followingIds é novo array)
-  const followingIdsRef = useRef(followingIds);
-  useEffect(() => {
-    followingIdsRef.current = followingIds;
-  });
   const supabase = createClient();
+
+  const followingSet = useMemo(
+    () => (followingIds ? new Set(followingIds) : null),
+    [followingIds],
+  );
+
+  // Filtro 100% client-side: troca de categoria/escopo é instantânea,
+  // sem ida ao servidor (o estado já tem o feed público carregado).
+  const visiblePosts = useMemo(
+    () =>
+      posts.filter((p) => {
+        if (category && p.category !== category) return false;
+        if (feed === "seguindo" && !followingSet?.has(p.user_id)) return false;
+        return true;
+      }),
+    [posts, category, feed, followingSet],
+  );
 
   useEffect(() => {
     const channel = supabase
@@ -44,17 +61,11 @@ export default function RealtimeFeed({
         { event: "INSERT", schema: "public", table: "posts" },
         async (payload) => {
           const newPost = payload.new as Post;
-          // Feed "Seguindo": só inserts de quem o usuário segue
-          if (
-            feedScope === "seguindo" &&
-            !followingIdsRef.current?.includes(newPost.user_id)
-          )
-            return;
-          // Filtro de categoria ativo: ignora inserts de outra seção
-          if (activeCategory && newPost.category !== activeCategory) return;
+          // Sem early-return por filtro: guardamos todo o feed público e
+          // o filtro de exibição cuida de categoria/escopo.
           const { data: profile } = await supabase
             .from("profiles")
-            .select("nickname, avatar_seed")
+            .select("nickname, avatar_seed, avatar_path, role")
             .eq("id", newPost.user_id)
             .single();
           setPosts((prev) => [
@@ -84,18 +95,17 @@ export default function RealtimeFeed({
             user_id: string;
             emoji: ReactionEmoji;
           };
+          // Idempotente: se a ação local já aplicou, o eco vira no-op.
           setPosts((prev) =>
             prev.map((post) =>
               post.id === newReaction.post_id
                 ? {
                     ...post,
-                    reactions: [
-                      ...post.reactions,
-                      {
-                        user_id: newReaction.user_id,
-                        emoji: newReaction.emoji,
-                      },
-                    ],
+                    reactions: setReactionFor(
+                      post.reactions,
+                      newReaction.user_id,
+                      newReaction.emoji,
+                    ),
                   }
                 : post,
             ),
@@ -114,16 +124,14 @@ export default function RealtimeFeed({
             emoji: ReactionEmoji;
           }>;
           if (!updated.post_id || !updated.user_id || !updated.emoji) return;
+          const uid = updated.user_id;
+          const em = updated.emoji;
           setPosts((prev) =>
             prev.map((post) =>
               post.id === updated.post_id
                 ? {
                     ...post,
-                    reactions: post.reactions.map((r) =>
-                      r.user_id === updated.user_id
-                        ? { ...r, emoji: updated.emoji! }
-                        : r,
-                    ),
+                    reactions: setReactionFor(post.reactions, uid, em),
                   }
                 : post,
             ),
@@ -141,15 +149,11 @@ export default function RealtimeFeed({
             user_id: string;
           }>;
           if (!oldReaction.post_id || !oldReaction.user_id) return;
+          const uid = oldReaction.user_id;
           setPosts((prev) =>
             prev.map((post) =>
               post.id === oldReaction.post_id
-                ? {
-                    ...post,
-                    reactions: post.reactions.filter(
-                      (r) => r.user_id !== oldReaction.user_id,
-                    ),
-                  }
+                ? { ...post, reactions: removeReactionFor(post.reactions, uid) }
                 : post,
             ),
           );
@@ -211,7 +215,7 @@ export default function RealtimeFeed({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, activeCategory, feedScope]);
+  }, [supabase]);
 
   const handleCommentDeleted = useCallback(
     (postId: number, commentId: number) => {
@@ -235,15 +239,34 @@ export default function RealtimeFeed({
     [],
   );
 
+  // Reação do próprio usuário: aplica já no estado autoritativo (não
+  // dependemos do eco do Realtime, que para DELETE pode não chegar).
+  const handleReactionChange = useCallback(
+    (postId: number, userId: string, emoji: ReactionEmoji) => {
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                reactions: applyReactionToggle(post.reactions, userId, emoji),
+              }
+            : post,
+        ),
+      );
+    },
+    [],
+  );
+
   const fetchMore = useCallback(async () => {
     if (isLoading || !hasMore || posts.length === 0) return;
     setIsLoading(true);
     const cursor = posts[posts.length - 1].created_at;
-    const next = await loadMorePosts(cursor, activeCategory, feedScope);
+    // Sempre pagina o feed público completo; o filtro é em memória.
+    const next = await loadMorePosts(cursor);
     setPosts((prev) => [...prev, ...next]);
     if (next.length < FEED_PAGE_SIZE) setHasMore(false);
     setIsLoading(false);
-  }, [isLoading, hasMore, posts, activeCategory, feedScope]);
+  }, [isLoading, hasMore, posts]);
 
   useEffect(() => {
     if (!hasMore) return;
@@ -260,30 +283,50 @@ export default function RealtimeFeed({
     return () => observer.disconnect();
   }, [hasMore, fetchMore]);
 
+  const emptyMessage =
+    feed === "seguindo"
+      ? (followingIds?.length ?? 0) === 0
+        ? "Você ainda não segue ninguém. Explore o feed público e siga moradores."
+        : "Ninguém que você segue publicou recados ainda."
+      : category
+        ? "Nenhum recado nesta categoria ainda."
+        : "Nenhum recado por aqui ainda... Seja o primeiro!";
+
   return (
     <div className="space-y-4">
-      {posts.map((post, index) => (
+      {visiblePosts.map((post) => (
         <PostCard
           key={post.id}
           post={post}
           user={user}
-          bgClass={index % 2 === 0 ? "bg-white" : "bg-mural-green"}
+          viewerRole={viewerRole}
           onCommentDeleted={handleCommentDeleted}
+          onReactionChange={handleReactionChange}
         />
       ))}
+
+      {/* Lista vazia: se ainda há páginas, mostramos o loader (pode haver
+          itens da categoria mais pra trás); senão, a mensagem de vazio. */}
+      {visiblePosts.length === 0 && !hasMore && (
+        <div className="text-center p-8 text-mural-ink/40 italic">
+          {emptyMessage}
+        </div>
+      )}
 
       {hasMore && (
         <div
           ref={sentinelRef}
           className="flex items-center justify-center gap-2 p-4 text-xs italic opacity-60"
         >
-          {isLoading ? (
+          {isLoading || visiblePosts.length === 0 ? (
             <>
               <span
                 aria-hidden
                 className="w-3 h-3 border-2 border-mural-dark border-t-transparent rounded-full animate-spin"
               />
-              Carregando mais recados...
+              {visiblePosts.length === 0
+                ? "Procurando recados..."
+                : "Carregando mais recados..."}
             </>
           ) : (
             "..."
@@ -291,7 +334,7 @@ export default function RealtimeFeed({
         </div>
       )}
 
-      {!hasMore && posts.length >= FEED_PAGE_SIZE && (
+      {!hasMore && visiblePosts.length >= FEED_PAGE_SIZE && (
         <div className="text-center p-4 text-xs italic opacity-40">
           🌳 Fim do mural por enquanto.
         </div>

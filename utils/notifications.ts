@@ -9,7 +9,7 @@ export async function fetchInitialNotifications(userId: string) {
     .select(
       `
       *,
-      actor:profiles!actor_id (nickname, avatar_seed)
+      actor:profiles!actor_id (nickname, avatar_seed, avatar_path)
     `,
     )
     .eq("recipient_id", userId)

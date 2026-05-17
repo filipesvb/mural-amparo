@@ -6,12 +6,34 @@ import {
   editComment,
   deleteComment,
 } from "@/app/actions";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import type { Comment, Reaction } from "@/utils/types";
+import type { ReactionEmoji } from "@/utils/reactions";
 import { REACTION_EMOJIS } from "@/utils/reactions";
+import { canModerate, type Role } from "@/utils/roles";
 import { EDIT_WINDOW_MS } from "@/utils/feed";
 import { RenderWithMentions } from "./MentionsProvider";
 import MentionInput from "./MentionInput";
+import HoneypotField from "./HoneypotField";
+
+// Comentário temporário (id negativo evita colisão de key) exibido na hora;
+// é descartado quando o comentário real chega via Realtime.
+function makeOptimisticComment(
+  postId: number,
+  currentUserId: string | null,
+  content: string,
+  parentId: number | null,
+): Comment {
+  return {
+    id: -Date.now(),
+    post_id: postId,
+    user_id: currentUserId ?? "",
+    content,
+    author_name: "Você",
+    created_at: new Date().toISOString(),
+    parent_comment_id: parentId,
+  };
+}
 
 export function PostInteractions({
   postId,
@@ -19,26 +41,44 @@ export function PostInteractions({
   comments,
   isLoggedIn,
   currentUserId,
+  viewerRole,
   onCommentDeleted,
+  onReactionChange,
 }: {
   postId: number;
   reactions: Pick<Reaction, "user_id" | "emoji">[];
   comments: Comment[];
   isLoggedIn: boolean;
   currentUserId: string | null;
+  viewerRole?: Role | null;
   onCommentDeleted?: (commentId: number) => void;
+  onReactionChange?: (
+    postId: number,
+    userId: string,
+    emoji: ReactionEmoji,
+  ) => void;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [commentError, setCommentError] = useState("");
-  const [isReactPending, startReactTransition] = useTransition();
+  const [, startReactTransition] = useTransition();
+
+  // Reação não usa useOptimistic: a mudança é aplicada direto no estado
+  // autoritativo do feed (onReactionChange) e persistida em background.
+  // Assim não há "reverter pro base e esperar o eco do Realtime" — que
+  // era o que causava o pisca-pisca (e o não-sumir ao remover).
+  const [optimisticComments, addOptimisticComment] = useOptimistic(
+    comments,
+    (state: Comment[], c: Comment) => [...state, c],
+  );
 
   const myReaction = currentUserId
     ? (reactions.find((r) => r.user_id === currentUserId)?.emoji ?? null)
     : null;
 
+
   return (
-    <div className="mt-4 pt-3 border-t border-mural-dark/10">
-      <div className="flex flex-wrap gap-1 text-xs font-bold items-center">
+    <div className="mt-4 pt-3 border-t border-mural-line">
+      <div className="flex flex-wrap gap-1.5 text-xs font-bold items-center">
         {REACTION_EMOJIS.map((emoji) => {
           const count = reactions.filter((r) => r.emoji === emoji).length;
           const mine = myReaction === emoji;
@@ -46,11 +86,15 @@ export function PostInteractions({
             <button
               key={emoji}
               onClick={() => {
-                if (isLoggedIn) {
-                  startReactTransition(() => setReaction(postId, emoji));
-                }
+                if (!isLoggedIn || !currentUserId) return;
+                // Aplica já no estado autoritativo (instantâneo, sem
+                // flicker) e persiste em background.
+                onReactionChange?.(postId, currentUserId, emoji);
+                startReactTransition(() => {
+                  setReaction(postId, emoji);
+                });
               }}
-              disabled={!isLoggedIn || isReactPending}
+              disabled={!isLoggedIn}
               title={
                 isLoggedIn
                   ? mine
@@ -58,11 +102,11 @@ export function PostInteractions({
                     : "Reagir"
                   : "Entre para reagir"
               }
-              className={`
-                flex items-center gap-1 px-2 py-1 transition-all
-                ${isReactPending ? "opacity-30 cursor-wait" : "retro-button-active"}
-                ${mine ? "retro-border bg-mural-creme" : "opacity-50 hover:opacity-100"}
-              `}
+              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 transition-colors ${
+                mine
+                  ? "bg-mural-brown/15 border-mural-brown text-mural-ink"
+                  : "bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme"
+              }`}
             >
               <span>{emoji}</span>
               {count > 0 && <span>{count}</span>}
@@ -72,20 +116,21 @@ export function PostInteractions({
 
         <button
           onClick={() => setShowComments(!showComments)}
-          className="opacity-60 hover:underline flex items-center gap-1 px-2 py-1"
+          className="ml-auto text-mural-ink/50 hover:text-mural-ink flex items-center gap-1 px-2 py-1"
         >
-          💬 {comments.length} Comentários
+          💬 {optimisticComments.length}{" "}
+          {optimisticComments.length === 1 ? "comentário" : "comentários"}
         </button>
       </div>
 
       {showComments && (
-        <div className="mt-4 space-y-3 bg-mural-creme/50 p-3 retro-border">
+        <div className="mt-4 space-y-3 bg-mural-creme/40 p-3 rounded-xl border border-mural-line">
           {(() => {
-            const topLevel = comments.filter(
+            const topLevel = optimisticComments.filter(
               (c) => c.parent_comment_id == null,
             );
             const repliesByParent = new Map<number, Comment[]>();
-            for (const c of comments) {
+            for (const c of optimisticComments) {
               if (c.parent_comment_id == null) continue;
               const list = repliesByParent.get(c.parent_comment_id) ?? [];
               list.push(c);
@@ -99,7 +144,9 @@ export function PostInteractions({
                 postId={postId}
                 currentUserId={currentUserId}
                 isLoggedIn={isLoggedIn}
+                viewerRole={viewerRole}
                 onDeleted={onCommentDeleted}
+                onAddOptimistic={addOptimisticComment}
               />
             ));
           })()}
@@ -109,11 +156,20 @@ export function PostInteractions({
               <form
                 action={async (formData) => {
                   setCommentError("");
+                  addOptimisticComment(
+                    makeOptimisticComment(
+                      postId,
+                      currentUserId,
+                      (formData.get("content") as string) ?? "",
+                      null,
+                    ),
+                  );
                   const result = await addComment(formData);
                   if (result?.error) setCommentError(result.error);
                 }}
                 className="flex gap-2 mt-2"
               >
+                <HoneypotField />
                 <input type="hidden" name="post_id" value={postId} />
                 <div className="flex-1">
                   <MentionInput
@@ -121,10 +177,10 @@ export function PostInteractions({
                     name="content"
                     required
                     placeholder="Escreva um comentário... use @ para mencionar"
-                    className="w-full p-1 text-[10px] bg-white border border-mural-dark focus:outline-none"
+                    className="w-full px-2 py-1.5 text-[11px] bg-mural-card border border-mural-line rounded-lg focus:outline-none focus:ring-2 focus:ring-mural-brown/30"
                   />
                 </div>
-                <button className="bg-mural-dark text-white px-2 py-1 text-[10px] font-bold">
+                <button className="bg-mural-brown text-white px-3 py-1.5 text-[11px] font-bold rounded-lg retro-button-active">
                   Enviar
                 </button>
               </form>
@@ -148,10 +204,12 @@ export function PostInteractions({
 function CommentRow({
   comment,
   currentUserId,
+  viewerRole,
   onDeleted,
 }: {
   comment: Comment;
   currentUserId: string | null;
+  viewerRole?: Role | null;
   onDeleted?: (commentId: number) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -160,6 +218,9 @@ function CommentRow({
   const [isDeleting, startDeleteTransition] = useTransition();
 
   const isOwner = !!currentUserId && currentUserId === comment.user_id;
+  // Staff (moderador/admin) pode apagar comentário de qualquer um.
+  const canMod = !!currentUserId && canModerate(viewerRole);
+  const canDelete = isOwner || canMod;
   const createdAtMs = new Date(comment.created_at).getTime();
   const [withinEditWindow, setWithinEditWindow] = useState(
     () => Date.now() - createdAtMs < EDIT_WINDOW_MS,
@@ -186,7 +247,10 @@ function CommentRow({
   }
 
   function handleDelete() {
-    if (!confirm("Excluir esse comentário?")) return;
+    const msg = isOwner
+      ? "Excluir esse comentário?"
+      : "Excluir o comentário deste morador como moderador?";
+    if (!confirm(msg)) return;
     startDeleteTransition(async () => {
       const result = await deleteComment(comment.id);
       if (result?.error) return;
@@ -195,7 +259,7 @@ function CommentRow({
   }
 
   return (
-    <div className="text-xs border-b border-mural-dark/5 pb-2">
+    <div className="text-xs border-b border-mural-line/60 pb-2 last:border-0">
       {isEditing ? (
         <form action={handleEditSubmit} className="space-y-1">
           <input type="hidden" name="comment_id" value={comment.id} />
@@ -204,7 +268,7 @@ function CommentRow({
             name="content"
             defaultValue={comment.content}
             required
-            className="w-full p-1 text-[10px] bg-white border border-mural-dark focus:outline-none"
+            className="w-full px-2 py-1.5 text-[11px] bg-mural-card border border-mural-line rounded-lg focus:outline-none focus:ring-2 focus:ring-mural-brown/30"
           />
           {editError && (
             <p className="text-[10px] text-red-700 italic">⚠️ {editError}</p>
@@ -213,7 +277,7 @@ function CommentRow({
             <button
               type="submit"
               disabled={isSaving}
-              className="bg-mural-dark text-white px-2 py-0.5 disabled:opacity-50"
+              className="bg-mural-brown text-white px-3 py-1 rounded-lg disabled:opacity-50"
             >
               {isSaving ? "..." : "Salvar"}
             </button>
@@ -224,7 +288,7 @@ function CommentRow({
                 setIsEditing(false);
                 setEditError("");
               }}
-              className="bg-mural-creme px-2 py-0.5 border border-mural-dark"
+              className="bg-mural-creme px-3 py-1 rounded-lg border border-mural-line"
             >
               Cancelar
             </button>
@@ -238,9 +302,9 @@ function CommentRow({
             </span>{" "}
             <RenderWithMentions text={comment.content} />
           </p>
-          {isOwner && (
+          {canDelete && (
             <div className="flex gap-1 text-[9px] font-bold shrink-0">
-              {withinEditWindow && (
+              {isOwner && withinEditWindow && (
                 <button
                   onClick={() => setIsEditing(true)}
                   disabled={isDeleting}
@@ -252,6 +316,7 @@ function CommentRow({
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
+                title={isOwner ? "Excluir" : "Excluir como moderador"}
                 className="text-red-700 hover:underline disabled:opacity-50"
               >
                 🗑️
@@ -270,14 +335,18 @@ function CommentThread({
   postId,
   currentUserId,
   isLoggedIn,
+  viewerRole,
   onDeleted,
+  onAddOptimistic,
 }: {
   comment: Comment;
   replies: Comment[];
   postId: number;
   currentUserId: string | null;
   isLoggedIn: boolean;
+  viewerRole?: Role | null;
   onDeleted?: (commentId: number) => void;
+  onAddOptimistic: (comment: Comment) => void;
 }) {
   const [isReplying, setIsReplying] = useState(false);
   const [replyError, setReplyError] = useState("");
@@ -286,6 +355,14 @@ function CommentThread({
   function handleReplySubmit(formData: FormData) {
     setReplyError("");
     startSendTransition(async () => {
+      onAddOptimistic(
+        makeOptimisticComment(
+          postId,
+          currentUserId,
+          (formData.get("content") as string) ?? "",
+          comment.id,
+        ),
+      );
       const result = await addComment(formData);
       if (result?.error) {
         setReplyError(result.error);
@@ -300,16 +377,18 @@ function CommentThread({
       <CommentRow
         comment={comment}
         currentUserId={currentUserId}
+        viewerRole={viewerRole}
         onDeleted={onDeleted}
       />
 
       {(replies.length > 0 || isReplying) && (
-        <div className="mt-2 ml-4 pl-3 border-l-2 border-mural-dark/15 space-y-2">
+        <div className="mt-2 ml-4 pl-3 border-l-2 border-mural-line space-y-2">
           {replies.map((reply) => (
             <CommentRow
               key={reply.id}
               comment={reply}
               currentUserId={currentUserId}
+              viewerRole={viewerRole}
               onDeleted={onDeleted}
             />
           ))}
@@ -317,6 +396,7 @@ function CommentThread({
           {isReplying && (
             <>
               <form action={handleReplySubmit} className="flex gap-2">
+                <HoneypotField />
                 <input type="hidden" name="post_id" value={postId} />
                 <input
                   type="hidden"
@@ -329,13 +409,13 @@ function CommentThread({
                     name="content"
                     required
                     placeholder="Escreva uma resposta... use @ para mencionar"
-                    className="w-full p-1 text-[10px] bg-white border border-mural-dark focus:outline-none"
+                    className="w-full px-2 py-1.5 text-[11px] bg-mural-card border border-mural-line rounded-lg focus:outline-none focus:ring-2 focus:ring-mural-brown/30"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isSending}
-                  className="bg-mural-dark text-white px-2 py-1 text-[10px] font-bold disabled:opacity-50"
+                  className="bg-mural-brown text-white px-3 py-1.5 text-[11px] font-bold rounded-lg disabled:opacity-50"
                 >
                   {isSending ? "..." : "Responder"}
                 </button>
@@ -353,7 +433,7 @@ function CommentThread({
       {isLoggedIn && (
         <button
           onClick={() => setIsReplying((v) => !v)}
-          className="mt-1 text-[10px] font-bold opacity-60 hover:opacity-100 hover:underline"
+          className="mt-1 text-[10px] font-bold text-mural-ink/50 hover:text-mural-ink"
         >
           {isReplying ? "Cancelar" : "↩︎ Responder"}
         </button>

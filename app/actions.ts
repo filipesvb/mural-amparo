@@ -10,11 +10,18 @@ import type { PostWithRelations } from "@/utils/types";
 import { FEED_PAGE_SIZE, EDIT_WINDOW_MS } from "@/utils/feed";
 import {
   POST_IMAGES_BUCKET,
+  AVATARS_BUCKET,
   MAX_POST_IMAGE_BYTES,
   ALLOWED_POST_IMAGE_TYPES,
   postImageExtension,
 } from "@/utils/storage";
 import { isReactionEmoji, type ReactionEmoji } from "@/utils/reactions";
+import { asRole, canModerate, isAdmin } from "@/utils/roles";
+import {
+  RATE_LIMIT,
+  isHoneypotTripped,
+  rateLimitMessage,
+} from "@/utils/antispam";
 import {
   isPostCategory,
   DEFAULT_CATEGORY,
@@ -25,6 +32,7 @@ import { fetchFollowingIds } from "@/utils/follows.server";
 export type SearchProfileHit = {
   nickname: string;
   avatar_seed: string | null;
+  avatar_path: string | null;
 };
 
 export type SearchPostHit = {
@@ -34,6 +42,7 @@ export type SearchPostHit = {
   author_name: string;
   author_nickname: string | null;
   author_avatar_seed: string | null;
+  author_avatar_path: string | null;
 };
 
 export type SearchResults = {
@@ -50,7 +59,7 @@ export async function searchAll(query: string): Promise<SearchResults> {
   const [profilesRes, postsRes] = await Promise.all([
     supabase
       .from("profiles")
-      .select("nickname, avatar_seed")
+      .select("nickname, avatar_seed, avatar_path")
       .ilike("nickname", `%${q}%`)
       .not("nickname", "is", null)
       .order("nickname")
@@ -59,7 +68,7 @@ export async function searchAll(query: string): Promise<SearchResults> {
       .from("posts")
       .select(
         `id, content, created_at, author_name,
-         profiles (nickname, avatar_seed)`,
+         profiles (nickname, avatar_seed, avatar_path)`,
       )
       .textSearch("search", q, { type: "websearch", config: "portuguese" })
       .order("created_at", { ascending: false })
@@ -71,7 +80,11 @@ export async function searchAll(query: string): Promise<SearchResults> {
     content: string;
     created_at: string;
     author_name: string;
-    profiles: { nickname: string | null; avatar_seed: string | null } | null;
+    profiles: {
+      nickname: string | null;
+      avatar_seed: string | null;
+      avatar_path: string | null;
+    } | null;
   };
 
   const posts: SearchPostHit[] = (
@@ -83,6 +96,7 @@ export async function searchAll(query: string): Promise<SearchResults> {
       author_name: p.author_name,
       author_nickname: p.profiles?.nickname ?? null,
       author_avatar_seed: p.profiles?.avatar_seed ?? null,
+      author_avatar_path: p.profiles?.avatar_path ?? null,
     }));
 
   return {
@@ -102,7 +116,7 @@ export async function loadMorePosts(
     .select(
       `
       *,
-      profiles (nickname, avatar_seed),
+      profiles (nickname, avatar_seed, avatar_path, role),
       reactions (user_id, emoji),
       comments (*)
     `,
@@ -132,7 +146,36 @@ export async function loadMorePosts(
   return (data ?? []) as PostWithRelations[];
 }
 
+// Rate limit baseado nas próprias tabelas (confiável em serverless, sem
+// estado em memória): conta quantas linhas o usuário criou na janela.
+async function checkRateLimit(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: "posts" | "comments",
+  userId: string,
+  cfg: { max: number; windowMs: number },
+): Promise<{ limited: boolean; retryAfterSec: number }> {
+  const cutoff = new Date(Date.now() - cfg.windowMs).toISOString();
+  const { data } = await supabase
+    .from(table)
+    .select("created_at")
+    .eq("user_id", userId)
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: true })
+    .limit(cfg.max + 5);
+  const rows = (data ?? []) as { created_at: string }[];
+  if (rows.length < cfg.max) return { limited: false, retryAfterSec: 0 };
+  const oldest = new Date(rows[0].created_at).getTime();
+  const retryAfterSec = Math.max(
+    1,
+    Math.ceil((cfg.windowMs - (Date.now() - oldest)) / 1000),
+  );
+  return { limited: true, retryAfterSec };
+}
+
 export async function createPost(formData: FormData) {
+  // Bot que caiu no campo isca: finge sucesso e não grava nada.
+  if (isHoneypotTripped(formData)) return;
+
   const supabase = await createClient();
 
   const {
@@ -151,6 +194,19 @@ export async function createPost(formData: FormData) {
 
   if (!content && !hasImage)
     return { error: "Escreva um recado ou anexe uma imagem." };
+
+  // Rate limit antes do upload da imagem (falha rápido, não sobe à toa).
+  const postRate = await checkRateLimit(
+    supabase,
+    "posts",
+    user.id,
+    RATE_LIMIT.post,
+  );
+  if (postRate.limited) {
+    return {
+      error: rateLimitMessage(RATE_LIMIT.post.label, postRate.retryAfterSec),
+    };
+  }
 
   let image_path: string | null = null;
 
@@ -461,8 +517,15 @@ export async function deletePost(postId: number) {
     .eq("id", postId)
     .single();
   if (!post) return { error: "Recado não encontrado." };
-  if (post.user_id !== user.id)
-    return { error: "Você não pode excluir este recado." };
+  if (post.user_id !== user.id) {
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (!canModerate(asRole(me?.role)))
+      return { error: "Você não pode excluir este recado." };
+  }
 
   const { error } = await supabase.from("posts").delete().eq("id", postId);
   if (error) {
@@ -538,8 +601,15 @@ export async function deleteComment(commentId: number) {
     .eq("id", commentId)
     .single();
   if (!comment) return { error: "Comentário não encontrado." };
-  if (comment.user_id !== user.id)
-    return { error: "Você não pode excluir este comentário." };
+  if (comment.user_id !== user.id) {
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (!canModerate(asRole(me?.role)))
+      return { error: "Você não pode excluir este comentário." };
+  }
 
   const { error } = await supabase
     .from("comments")
@@ -554,6 +624,9 @@ export async function deleteComment(commentId: number) {
 }
 
 export async function addComment(formData: FormData) {
+  // Bot que caiu no campo isca: finge sucesso e não grava nada.
+  if (isHoneypotTripped(formData)) return;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -568,6 +641,21 @@ export async function addComment(formData: FormData) {
     parentRaw && Number(parentRaw) ? Number(parentRaw) : null;
 
   if (!content) return { error: "O comentário não pode estar vazio." };
+
+  const commentRate = await checkRateLimit(
+    supabase,
+    "comments",
+    user.id,
+    RATE_LIMIT.comment,
+  );
+  if (commentRate.limited) {
+    return {
+      error: rateLimitMessage(
+        RATE_LIMIT.comment.label,
+        commentRate.retryAfterSec,
+      ),
+    };
+  }
 
   // Mantém consistência com posts: nickname do perfil > prefixo do e-mail > "Morador"
   const { data: profile } = await supabase
@@ -611,22 +699,129 @@ export async function updateProfile(formData: FormData) {
   }
   const nickname = parsed.data;
 
+  // Foto de perfil: caminho atual (pra apagar o arquivo antigo ao trocar/remover)
+  const { data: current } = await supabase
+    .from("profiles")
+    .select("avatar_path")
+    .eq("id", user.id)
+    .single();
+  const oldAvatarPath: string | null = current?.avatar_path ?? null;
+
+  const removeAvatar = formData.get("remove_avatar") === "1";
+  const avatarFile = formData.get("avatar");
+  const hasNewAvatar = avatarFile instanceof File && avatarFile.size > 0;
+
+  // undefined = não mexe no avatar_path; null = remover; string = nova foto
+  let avatar_path: string | null | undefined = undefined;
+  let uploadedPath: string | null = null;
+
+  if (hasNewAvatar) {
+    const file = avatarFile as File;
+    if (
+      !(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)
+    ) {
+      return { error: "Formato inválido. Use JPG, PNG, WebP ou GIF." };
+    }
+    if (file.size > MAX_POST_IMAGE_BYTES) {
+      return { error: "Imagem muito grande. O limite é 5 MB." };
+    }
+    const ext = postImageExtension(file.type)!;
+    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from(AVATARS_BUCKET)
+      .upload(path, file, { contentType: file.type });
+    if (uploadError) {
+      console.error("Erro ao subir avatar:", uploadError);
+      return { error: "Não foi possível enviar a foto." };
+    }
+    uploadedPath = path;
+    avatar_path = path;
+  } else if (removeAvatar) {
+    avatar_path = null;
+  }
+
+  const updatePayload: {
+    nickname: string;
+    avatar_seed: string;
+    updated_at: string;
+    avatar_path?: string | null;
+  } = { nickname, avatar_seed, updated_at: new Date().toISOString() };
+  if (avatar_path !== undefined) updatePayload.avatar_path = avatar_path;
+
   const { error } = await supabase
     .from("profiles")
-    .update({
-      nickname,
-      avatar_seed,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("id", user.id);
 
   if (error) {
+    // Não deixa arquivo órfão se o update falhou após o upload
+    if (uploadedPath) {
+      await supabase.storage.from(AVATARS_BUCKET).remove([uploadedPath]);
+    }
     if (error.message.includes("unique constraint")) {
       return { error: "Este apelido já está em uso." };
     }
     return { error: error.message };
   }
 
+  // Trocou ou removeu a foto: apaga o arquivo antigo (best-effort)
+  if (
+    oldAvatarPath &&
+    avatar_path !== undefined &&
+    oldAvatarPath !== avatar_path
+  ) {
+    await supabase.storage.from(AVATARS_BUCKET).remove([oldAvatarPath]);
+  }
+
   revalidatePath("/");
   redirect(`/perfil/${encodeURIComponent(nickname)}`);
+}
+
+// Promove/rebaixa um morador. Só admin. Pela UI o papel só transita entre
+// 'morador' e 'moderador' — virar/sair de 'admin' é só por SQL (evita
+// escalonamento e lockout). Admin não pode ter o papel mexido pela interface.
+export async function setUserRole(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (!isAdmin(asRole(me?.role))) {
+    return { error: "Apenas administradores podem gerenciar papéis." };
+  }
+
+  const targetId = (formData.get("target_id") as string) ?? "";
+  const newRole = formData.get("role");
+  if (!targetId) return { error: "Usuário inválido." };
+  if (newRole !== "morador" && newRole !== "moderador") {
+    return { error: "Papel inválido." };
+  }
+
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", targetId)
+    .single();
+  if (!target) return { error: "Usuário não encontrado." };
+  if (asRole(target.role) === "admin") {
+    return { error: "Não é possível alterar um admin pela interface." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ role: newRole, updated_at: new Date().toISOString() })
+    .eq("id", targetId);
+  if (error) {
+    console.error("Erro ao alterar papel:", error);
+    return { error: "Não foi possível alterar o papel." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import Avatar from "./Avatar";
 import {
   ChangeEvent,
   KeyboardEvent,
@@ -12,7 +12,7 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import type { Profile } from "@/utils/types";
 
-type Suggestion = Pick<Profile, "nickname" | "avatar_seed">;
+type Suggestion = Pick<Profile, "nickname" | "avatar_seed" | "avatar_path">;
 
 type CommonProps = {
   name: string;
@@ -116,7 +116,7 @@ export default function MentionInput(props: TextareaProps | InputProps) {
     const handle = setTimeout(async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("nickname, avatar_seed")
+        .select("nickname, avatar_seed, avatar_path")
         .ilike("nickname", `${query}%`)
         .not("nickname", "is", null)
         .order("nickname")
@@ -200,7 +200,6 @@ export default function MentionInput(props: TextareaProps | InputProps) {
       {showDropdown && (
         <ul className="absolute left-0 right-0 top-full mt-1 z-30 bg-white retro-border shadow-lg max-h-56 overflow-y-auto text-mural-dark">
           {suggestions.map((s, idx) => {
-            const seed = (s.avatar_seed || s.nickname || "morador").trim();
             return (
               <li key={s.nickname}>
                 <button
@@ -215,11 +214,11 @@ export default function MentionInput(props: TextareaProps | InputProps) {
                   }`}
                 >
                   <span className="w-6 h-6 bg-mural-brown retro-border overflow-hidden shrink-0">
-                    <Image
-                      src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent(seed)}`}
-                      alt=""
-                      width={24}
-                      height={24}
+                    <Avatar
+                      avatarPath={s.avatar_path}
+                      seed={s.avatar_seed}
+                      name={s.nickname}
+                      size={24}
                     />
                   </span>
                   <span className="font-bold">@{s.nickname}</span>

@@ -11,6 +11,7 @@ import { collectMentionsFromPosts } from "@/utils/mentions";
 import { fetchValidMentions } from "@/utils/mentions.server";
 import { canonicalTag, hashtagMatchPattern } from "@/utils/hashtags";
 import type { PostWithRelations } from "@/utils/types";
+import { asRole } from "@/utils/roles";
 
 export default async function HashtagPage({
   params,
@@ -33,7 +34,7 @@ export default async function HashtagPage({
     .select(
       `
       *,
-      profiles (nickname, avatar_seed),
+      profiles (nickname, avatar_seed, avatar_path, role),
       reactions (user_id, emoji),
       comments (*)
     `,
@@ -52,18 +53,28 @@ export default async function HashtagPage({
     collectMentionsFromPosts(postsList),
   );
 
+  let viewerRole = asRole(null);
+  if (user) {
+    const { data: me } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    viewerRole = asRole(me?.role);
+  }
+
   return (
-    <main className="min-h-screen p-4 md:p-8 flex justify-center bg-mural-creme">
-      <div className="w-full max-w-3xl bg-mural-creme retro-border rounded-xl flex flex-col overflow-hidden self-start">
-        <header className="wood-header-footer shrink-0 p-4 border-b-2 flex justify-between items-center text-mural-creme">
-          <div className="flex items-center gap-2">
+    <main className="min-h-screen p-3 md:p-6 flex justify-center">
+      <div className="w-full max-w-3xl bg-mural-creme border border-mural-line rounded-2xl shadow-md flex flex-col overflow-hidden self-start">
+        <header className="wood-header-footer shrink-0 px-5 py-4 flex justify-between items-center text-mural-creme">
+          <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="text-xs bg-mural-dark px-2 py-1 border border-white retro-button-active hover:text-white"
+              className="text-xs bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 rounded-lg font-bold"
             >
-              [←] Mural
+              ← Mural
             </Link>
-            <h1 className="text-xl font-bold tracking-tight">#{tag}</h1>
+            <h1 className="text-lg mural-title text-mural-creme">#{tag}</h1>
           </div>
 
           <div className="flex-1 mx-4 hidden md:flex justify-center">
@@ -80,47 +91,47 @@ export default async function HashtagPage({
               <form action={signOut}>
                 <button
                   type="submit"
-                  className="bg-red-800 text-white px-3 py-1 text-xs font-bold border border-white retro-button-active"
+                  className="bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 text-xs font-bold rounded-lg"
                 >
-                  Sair [X]
+                  Sair
                 </button>
               </form>
             </div>
           ) : (
             <Link
               href="/login"
-              className="bg-mural-dark text-white px-3 py-1 rounded border border-white retro-button-active text-xs font-bold"
+              className="bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-4 py-1.5 rounded-lg text-xs font-bold"
             >
               Entrar 🔑
             </Link>
           )}
         </header>
 
-        <section className="flex-1 p-4 space-y-4 bg-white/50">
-          <h3 className="text-sm font-bold uppercase text-mural-dark border-b-2 border-mural-dark pb-1">
+        <section className="flex-1 p-4 space-y-4">
+          <h3 className="text-sm font-bold uppercase text-mural-ink/60 border-b border-mural-line pb-2">
             🏷️ Recados com #{tag}
           </h3>
 
           {postsList.length === 0 ? (
-            <div className="text-center p-8 opacity-50 italic">
+            <div className="text-center p-8 text-mural-ink/40 italic">
               Nenhum recado com #{tag} ainda.
             </div>
           ) : (
             <MentionsProvider initialValidMentions={initialValidMentions}>
-              {postsList.map((post, index) => (
+              {postsList.map((post) => (
                 <PostCard
                   key={post.id}
                   post={post}
                   user={user}
-                  bgClass={index % 2 === 0 ? "bg-white" : "bg-mural-green"}
+                  viewerRole={viewerRole}
                 />
               ))}
             </MentionsProvider>
           )}
         </section>
 
-        <footer className="wood-header-footer shrink-0 p-4 border-t-2 text-center text-mural-creme">
-          <p className="text-[10px] opacity-70">© 2026 - Conectando Amparo</p>
+        <footer className="wood-header-footer shrink-0 p-5 text-center text-mural-creme">
+          <p className="text-[10px] opacity-70">© 2026 · Conectando Amparo</p>
         </footer>
       </div>
     </main>

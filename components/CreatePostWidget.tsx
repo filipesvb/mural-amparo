@@ -10,6 +10,8 @@ import {
   MAX_POST_IMAGE_BYTES,
 } from "@/utils/storage";
 import { POST_CATEGORIES, DEFAULT_CATEGORY } from "@/utils/categories";
+import Avatar from "./Avatar";
+import HoneypotField from "./HoneypotField";
 import MentionInput from "./MentionInput";
 
 export default function CreatePostWidget({
@@ -59,19 +61,31 @@ export default function CreatePostWidget({
     setIsOpen(false);
   }
 
+  const avatar = (
+    <div className="w-10 h-10 rounded-lg overflow-hidden ring-1 ring-mural-line bg-mural-creme shrink-0">
+      <Avatar
+        avatarPath={profile?.avatar_path}
+        seed={profile?.avatar_seed}
+        name={profile?.nickname || user?.email?.split("@")[0]}
+        size={40}
+        alt="seu avatar"
+      />
+    </div>
+  );
+
   // Se o morador não estiver logado, o botão leva para o login
   if (!user) {
     return (
       <a
         href="/login"
-        className="w-full bg-mural-creme text-mural-dark p-4 retro-border font-bold flex items-center justify-between gap-2 retro-button-active mb-6 hover:bg-white transition-colors"
+        className="soft-card p-4 flex items-center justify-between gap-2 hover:bg-mural-creme transition-colors"
       >
-        <span className="text-gray-500 font-normal italic">
+        <span className="text-mural-ink/45 italic">
           Entre para postar um recado em Amparo...
         </span>
-        <div className="bg-mural-dark text-white px-4 py-1 retro-border text-sm">
+        <span className="bg-mural-brown text-white px-4 py-1.5 rounded-lg text-sm font-bold">
           🔑 Entrar
-        </div>
+        </span>
       </a>
     );
   }
@@ -80,14 +94,15 @@ export default function CreatePostWidget({
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="w-full bg-mural-creme text-mural-dark p-4 retro-border font-bold flex items-center justify-between gap-2 retro-button-active mb-6 hover:bg-white transition-colors"
+        className="soft-card p-4 w-full flex items-center gap-3 text-left hover:bg-mural-creme transition-colors"
       >
-        <span className="text-gray-500 font-normal italic">
+        {avatar}
+        <span className="flex-1 text-mural-ink/45 italic">
           O que está acontecendo, {profile?.nickname}?
         </span>
-        <div className="bg-mural-brown text-white px-4 py-1 retro-border text-sm">
-          ➕ Escrever
-        </div>
+        <span className="bg-mural-brown text-white px-4 py-1.5 rounded-lg text-sm font-bold shrink-0">
+          + Escrever
+        </span>
       </button>
     );
   }
@@ -103,24 +118,26 @@ export default function CreatePostWidget({
         }
         reset();
       }}
-      className="bg-white p-4 retro-border mb-6 relative shadow-md"
+      className="soft-card p-4"
     >
-      <div className="flex justify-between items-center border-b-2 border-mural-brown mb-3 pb-2">
-        <h3 className="font-bold text-mural-brown italic">
-          Novo Recado de: {profile?.nickname || user.email?.split("@")[0]}
+      <HoneypotField />
+      <div className="flex items-center gap-3 mb-3">
+        {avatar}
+        <h3 className="flex-1 font-bold text-mural-ink">
+          {profile?.nickname || user.email?.split("@")[0]}
         </h3>
         <button
           type="button"
           onClick={reset}
-          className="text-red-700 font-bold hover:underline text-sm"
+          className="text-mural-ink/40 hover:text-mural-ink text-sm font-bold"
         >
-          [X] Fechar
+          ✕
         </button>
       </div>
 
       <div className="space-y-3">
         {error && (
-          <div className="bg-red-100 border-2 border-red-800 p-2 text-red-800 text-xs font-bold">
+          <div className="bg-red-100 border border-red-300 rounded-lg p-2 text-red-800 text-xs font-bold">
             ⚠️ {error}
           </div>
         )}
@@ -135,23 +152,8 @@ export default function CreatePostWidget({
           name="content"
           placeholder="Digite seu recado aqui... use @ para mencionar moradores"
           rows={3}
-          className="w-full p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none text-sm resize-none"
+          className="w-full p-3 bg-mural-creme border border-mural-line rounded-lg focus:outline-none focus:ring-2 focus:ring-mural-brown/30 text-sm resize-none"
         />
-
-        <label className="flex items-center gap-2 text-sm font-bold">
-          <span>Categoria:</span>
-          <select
-            name="category"
-            defaultValue={DEFAULT_CATEGORY}
-            className="flex-1 p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none text-sm"
-          >
-            {POST_CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.icon} {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
 
         {previewUrl && (
           <div className="relative inline-block">
@@ -161,12 +163,12 @@ export default function CreatePostWidget({
               width={1200}
               height={900}
               unoptimized
-              className="h-auto w-auto max-w-full max-h-80 object-contain bg-mural-creme retro-border"
+              className="h-auto w-auto max-w-full max-h-80 object-contain rounded-lg border border-mural-line bg-mural-creme"
             />
             <button
               type="button"
               onClick={clearImage}
-              className="absolute top-1 right-1 bg-red-800 text-white text-xs font-bold px-2 py-1 retro-border"
+              className="absolute top-1 right-1 bg-red-700/90 text-white text-xs font-bold px-2 py-1 rounded-lg"
             >
               ✕ Remover
             </button>
@@ -174,8 +176,11 @@ export default function CreatePostWidget({
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <label className="bg-mural-creme text-mural-dark px-3 py-2 text-sm font-bold retro-border retro-button-active cursor-pointer">
-            🖼️ {previewUrl ? "Trocar imagem" : "Anexar imagem"}
+          <label
+            title="Anexar imagem"
+            className="flex items-center justify-center w-9 h-9 rounded-lg bg-mural-creme border border-mural-line hover:bg-white cursor-pointer"
+          >
+            🖼️
             <input
               ref={fileInputRef}
               type="file"
@@ -185,11 +190,24 @@ export default function CreatePostWidget({
               className="hidden"
             />
           </label>
+
+          <select
+            name="category"
+            defaultValue={DEFAULT_CATEGORY}
+            className="px-3 py-2 bg-mural-creme border border-mural-line rounded-lg focus:outline-none text-sm"
+          >
+            {POST_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.icon} {c.label}
+              </option>
+            ))}
+          </select>
+
           <button
             type="submit"
-            className="bg-mural-brown text-white px-6 py-2 font-bold retro-border retro-button-active flex-1"
+            className="ml-auto bg-mural-brown text-white px-6 py-2 font-bold rounded-lg retro-button-active"
           >
-            Publicar no Mural 📢
+            + Escrever
           </button>
         </div>
       </div>

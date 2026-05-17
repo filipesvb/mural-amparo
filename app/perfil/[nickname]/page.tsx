@@ -1,8 +1,9 @@
 import { createClient } from "@/utils/supabase/server";
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import PostCard from "@/components/PostCard";
+import Avatar from "@/components/Avatar";
+import RoleBadge from "@/components/RoleBadge";
 import FollowButton from "@/components/FollowButton";
 import NotificationBell from "@/components/NotificationBell";
 import SearchBar from "@/components/SearchBar";
@@ -12,6 +13,7 @@ import { fetchInitialNotifications } from "@/utils/notifications";
 import { collectMentionsFromPosts } from "@/utils/mentions";
 import { fetchValidMentions } from "@/utils/mentions.server";
 import type { PostWithRelations } from "@/utils/types";
+import { asRole } from "@/utils/roles";
 
 export default async function PerfilPublicoPage({
   params,
@@ -40,7 +42,7 @@ export default async function PerfilPublicoPage({
     .select(
       `
       *,
-      profiles (nickname, avatar_seed),
+      profiles (nickname, avatar_seed, avatar_path, role),
       reactions (user_id, emoji),
       comments (*)
     `,
@@ -64,6 +66,21 @@ export default async function PerfilPublicoPage({
   );
 
   const isOwner = user?.id === profile.id;
+
+  // Papel de quem está vendo (libera a UI de moderação nos PostCard).
+  let viewerRole = asRole(null);
+  if (user) {
+    if (isOwner) {
+      viewerRole = asRole(profile.role);
+    } else {
+      const { data: me } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      viewerRole = asRole(me?.role);
+    }
+  }
 
   const [{ count: followersCount }, { count: followingCount }] =
     await Promise.all([
@@ -96,18 +113,18 @@ export default async function PerfilPublicoPage({
     : null;
 
   return (
-    <main className="min-h-screen p-4 md:p-8 flex justify-center bg-mural-creme">
-      <div className="w-full max-w-3xl bg-mural-creme retro-border rounded-xl flex flex-col overflow-hidden self-start">
-        <header className="wood-header-footer shrink-0 p-4 border-b-2 flex justify-between items-center text-mural-creme">
-          <div className="flex items-center gap-2">
+    <main className="min-h-screen p-3 md:p-6 flex justify-center">
+      <div className="w-full max-w-3xl bg-mural-creme border border-mural-line rounded-2xl shadow-md flex flex-col overflow-hidden self-start">
+        <header className="wood-header-footer shrink-0 px-5 py-4 flex justify-between items-center text-mural-creme">
+          <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="text-xs bg-mural-dark px-2 py-1 border border-white retro-button-active hover:text-white"
+              className="text-xs bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 rounded-lg font-bold"
             >
-              [←] Mural
+              ← Mural
             </Link>
-            <h1 className="text-xl font-bold tracking-tight">
-              👤 Perfil de Morador
+            <h1 className="text-lg mural-title text-mural-creme">
+              Perfil de Morador
             </h1>
           </div>
 
@@ -125,65 +142,67 @@ export default async function PerfilPublicoPage({
               <form action={signOut}>
                 <button
                   type="submit"
-                  className="bg-red-800 text-white px-3 py-1 text-xs font-bold border border-white retro-button-active"
+                  className="bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 text-xs font-bold rounded-lg"
                 >
-                  Sair [X]
+                  Sair
                 </button>
               </form>
             </div>
           ) : (
             <Link
               href="/login"
-              className="bg-mural-dark text-white px-3 py-1 rounded border border-white retro-button-active text-xs font-bold"
+              className="bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-4 py-1.5 rounded-lg text-xs font-bold"
             >
               Entrar 🔑
             </Link>
           )}
         </header>
 
-        <section className="bg-mural-panel border-b-2 border-mural-dark p-6 flex flex-col md:flex-row gap-6 items-center md:items-start">
-          <div className="w-24 h-24 bg-mural-brown retro-border overflow-hidden shrink-0">
-            <Image
-              src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent((profile.avatar_seed || profile.nickname || "morador").trim())}`}
+        <section className="bg-mural-panel/60 border-b border-mural-line p-6 flex flex-col md:flex-row gap-6 items-center md:items-start">
+          <div className="w-24 h-24 bg-mural-creme rounded-xl ring-1 ring-mural-line border-b-4 border-mural-brown overflow-hidden shrink-0">
+            <Avatar
+              avatarPath={profile.avatar_path}
+              seed={profile.avatar_seed}
+              name={profile.nickname}
+              size={96}
               alt={`avatar de ${profile.nickname}`}
-              width={96}
-              height={96}
             />
           </div>
 
           <div className="flex-1 text-center md:text-left space-y-2">
-            <h2 className="text-2xl font-bold text-mural-dark">
+            <h2 className="text-2xl font-extrabold text-mural-ink flex items-center gap-2 justify-center md:justify-start">
               {profile.nickname}
+              <RoleBadge role={asRole(profile.role)} />
             </h2>
             {memberSince && (
-              <p className="text-xs italic opacity-70">
+              <p className="text-xs italic text-mural-ink/50">
                 🌳 Morador desde {memberSince}
               </p>
             )}
-            <div className="flex gap-4 justify-center md:justify-start text-sm font-bold mt-3">
-              <span className="bg-white retro-border px-3 py-1">
+            <div className="flex flex-wrap gap-2 justify-center md:justify-start text-sm font-bold mt-3">
+              <span className="bg-mural-card border border-mural-line rounded-full px-3 py-1">
                 📝 {totalPosts}{" "}
-                <span className="font-normal opacity-70">
+                <span className="font-normal text-mural-ink/50">
                   {totalPosts === 1 ? "recado" : "recados"}
                 </span>
               </span>
-              <span className="bg-white retro-border px-3 py-1">
+              <span className="bg-mural-card border border-mural-line rounded-full px-3 py-1">
                 😊 {totalReacoesRecebidas}{" "}
-                <span className="font-normal opacity-70">
+                <span className="font-normal text-mural-ink/50">
                   {totalReacoesRecebidas === 1
                     ? "reação recebida"
                     : "reações recebidas"}
                 </span>
               </span>
-              <span className="bg-white retro-border px-3 py-1">
+              <span className="bg-mural-card border border-mural-line rounded-full px-3 py-1">
                 👥 {followersCount ?? 0}{" "}
-                <span className="font-normal opacity-70">
+                <span className="font-normal text-mural-ink/50">
                   {(followersCount ?? 0) === 1 ? "seguidor" : "seguidores"}
                 </span>
               </span>
-              <span className="bg-white retro-border px-3 py-1">
+              <span className="bg-mural-card border border-mural-line rounded-full px-3 py-1">
                 {followingCount ?? 0}{" "}
-                <span className="font-normal opacity-70">seguindo</span>
+                <span className="font-normal text-mural-ink/50">seguindo</span>
               </span>
             </div>
           </div>
@@ -191,7 +210,7 @@ export default async function PerfilPublicoPage({
           {isOwner ? (
             <Link
               href="/perfil/editar"
-              className="bg-mural-brown text-white px-4 py-2 text-sm font-bold retro-border retro-button-active shrink-0"
+              className="bg-mural-brown text-white px-4 py-2 text-sm font-bold rounded-lg retro-button-active shrink-0"
             >
               ✏️ Editar perfil
             </Link>
@@ -205,33 +224,33 @@ export default async function PerfilPublicoPage({
           )}
         </section>
 
-        <section className="flex-1 p-4 space-y-4 bg-white/50">
-          <h3 className="text-sm font-bold uppercase text-mural-dark border-b-2 border-mural-dark pb-1">
+        <section className="flex-1 p-4 space-y-4">
+          <h3 className="text-sm font-bold uppercase text-mural-ink/60 border-b border-mural-line pb-2">
             📰 Recados publicados
           </h3>
 
           {postsList.length === 0 ? (
-            <div className="text-center p-8 opacity-50 italic">
+            <div className="text-center p-8 text-mural-ink/40 italic">
               {isOwner
                 ? "Você ainda não publicou nenhum recado em Amparo."
                 : `${profile.nickname} ainda não deixou recados no Mural.`}
             </div>
           ) : (
             <MentionsProvider initialValidMentions={initialValidMentions}>
-              {postsList.map((post, index) => (
+              {postsList.map((post) => (
                 <PostCard
                   key={post.id}
                   post={post}
                   user={user}
-                  bgClass={index % 2 === 0 ? "bg-white" : "bg-mural-green"}
+                  viewerRole={viewerRole}
                 />
               ))}
             </MentionsProvider>
           )}
         </section>
 
-        <footer className="wood-header-footer shrink-0 p-4 border-t-2 text-center text-mural-creme">
-          <p className="text-[10px] opacity-70">© 2026 - Conectando Amparo</p>
+        <footer className="wood-header-footer shrink-0 p-5 text-center text-mural-creme">
+          <p className="text-[10px] opacity-70">© 2026 · Conectando Amparo</p>
         </footer>
       </div>
     </main>

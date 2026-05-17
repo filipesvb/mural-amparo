@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import Avatar from "./Avatar";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   searchAll,
@@ -50,7 +50,7 @@ export default function SearchBar() {
   const showDropdown = open && trimmed.length >= 2;
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-xs">
+    <div ref={containerRef} className="relative w-full max-w-md">
       <input
         type="search"
         value={query}
@@ -60,11 +60,11 @@ export default function SearchBar() {
         }}
         onFocus={() => setOpen(true)}
         placeholder="🔎 Buscar moradores ou recados"
-        className="w-full px-2 py-1 text-xs bg-mural-creme text-mural-dark border border-white retro-border focus:outline-none"
+        className="w-full px-4 py-2 text-sm bg-mural-creme text-mural-ink rounded-full border border-mural-line shadow-sm focus:outline-none focus:ring-2 focus:ring-mural-brown/30"
       />
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-white retro-border shadow-lg text-mural-dark max-h-96 overflow-y-auto">
+        <div className="absolute left-0 right-0 top-full mt-2 z-30 bg-mural-card border border-mural-line rounded-xl shadow-lg text-mural-ink max-h-96 overflow-y-auto">
           {!hasResults && !isPending && (
             <div className="p-4 text-xs italic opacity-60 text-center">
               Nenhum resultado para “{trimmed}”.
@@ -78,7 +78,7 @@ export default function SearchBar() {
 
           {results.profiles.length > 0 && (
             <section>
-              <div className="bg-mural-panel px-3 py-1 border-b-2 border-mural-dark text-[10px] font-bold uppercase">
+              <div className="bg-mural-creme px-3 py-1.5 border-b border-mural-line text-[10px] font-bold uppercase text-mural-ink/60">
                 Moradores
               </div>
               <ul>
@@ -93,7 +93,7 @@ export default function SearchBar() {
 
           {results.posts.length > 0 && (
             <section>
-              <div className="bg-mural-panel px-3 py-1 border-b-2 border-t-2 border-mural-dark text-[10px] font-bold uppercase">
+              <div className="bg-mural-creme px-3 py-1.5 border-y border-mural-line text-[10px] font-bold uppercase text-mural-ink/60">
                 Recados
               </div>
               <ul>
@@ -118,19 +118,18 @@ function ProfileRow({
   profile: SearchProfileHit;
   onClick: () => void;
 }) {
-  const seed = (profile.avatar_seed || profile.nickname || "morador").trim();
   return (
     <Link
       href={`/perfil/${encodeURIComponent(profile.nickname)}`}
       onClick={onClick}
-      className="flex items-center gap-2 px-3 py-2 hover:bg-mural-creme border-b border-mural-dark/10"
+      className="flex items-center gap-2 px-3 py-2 hover:bg-mural-creme border-b border-mural-line"
     >
-      <span className="w-7 h-7 bg-mural-brown retro-border overflow-hidden shrink-0">
-        <Image
-          src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent(seed)}`}
-          alt=""
-          width={28}
-          height={28}
+      <span className="w-7 h-7 bg-mural-creme rounded-lg ring-1 ring-mural-line overflow-hidden shrink-0">
+        <Avatar
+          avatarPath={profile.avatar_path}
+          seed={profile.avatar_seed}
+          name={profile.nickname}
+          size={28}
         />
       </span>
       <span className="text-xs font-bold">@{profile.nickname}</span>
@@ -145,12 +144,6 @@ function PostRow({
   post: SearchPostHit;
   onClick: () => void;
 }) {
-  const seed = (
-    post.author_avatar_seed ||
-    post.author_nickname ||
-    post.author_name ||
-    "morador"
-  ).trim();
   const author = post.author_nickname ?? post.author_name;
   const excerpt =
     post.content.length > 120
@@ -162,12 +155,12 @@ function PostRow({
 
   const body = (
     <>
-      <span className="w-7 h-7 bg-mural-brown retro-border overflow-hidden shrink-0">
-        <Image
-          src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent(seed)}`}
-          alt=""
-          width={28}
-          height={28}
+      <span className="w-7 h-7 bg-mural-creme rounded-lg ring-1 ring-mural-line overflow-hidden shrink-0">
+        <Avatar
+          avatarPath={post.author_avatar_path}
+          seed={post.author_avatar_seed}
+          name={post.author_nickname || post.author_name}
+          size={28}
         />
       </span>
       <div className="flex-1 min-w-0">
@@ -179,7 +172,7 @@ function PostRow({
 
   if (!href) {
     return (
-      <div className="flex items-start gap-2 px-3 py-2 border-b border-mural-dark/10">
+      <div className="flex items-start gap-2 px-3 py-2 border-b border-mural-line">
         {body}
       </div>
     );
@@ -188,7 +181,7 @@ function PostRow({
     <Link
       href={href}
       onClick={onClick}
-      className="flex items-start gap-2 px-3 py-2 hover:bg-mural-creme border-b border-mural-dark/10"
+      className="flex items-start gap-2 px-3 py-2 hover:bg-mural-creme border-b border-mural-line"
     >
       {body}
     </Link>

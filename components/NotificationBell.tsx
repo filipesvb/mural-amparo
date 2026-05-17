@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type {
@@ -11,6 +10,7 @@ import type {
   Profile,
 } from "@/utils/types";
 import { markNotificationsRead } from "@/app/actions";
+import Avatar from "./Avatar";
 
 const MAX_VISIBLE = 10;
 
@@ -48,11 +48,14 @@ export default function NotificationBell({
         },
         async (payload) => {
           const newNotif = payload.new as Notification;
-          let actor: Pick<Profile, "nickname" | "avatar_seed"> | null = null;
+          let actor: Pick<
+            Profile,
+            "nickname" | "avatar_seed" | "avatar_path"
+          > | null = null;
           if (newNotif.actor_id) {
             const { data } = await supabase
               .from("profiles")
-              .select("nickname, avatar_seed")
+              .select("nickname, avatar_seed, avatar_path")
               .eq("id", newNotif.actor_id)
               .single();
             actor = data;
@@ -130,8 +133,8 @@ export default function NotificationBell({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-72 bg-white retro-border shadow-lg z-20 text-mural-dark">
-          <div className="bg-mural-panel px-3 py-2 border-b-2 border-mural-dark text-xs font-bold uppercase">
+        <div className="absolute right-0 mt-2 w-72 bg-mural-card border border-mural-line rounded-xl shadow-lg z-20 text-mural-ink overflow-hidden">
+          <div className="bg-mural-creme px-3 py-2 border-b border-mural-line text-xs font-bold uppercase text-mural-ink/60">
             Notificações
           </div>
           {notifications.length === 0 ? (
@@ -143,7 +146,7 @@ export default function NotificationBell({
               {notifications.map((n) => (
                 <li
                   key={n.id}
-                  className={`px-3 py-2 border-b border-mural-dark/10 ${n.read_at ? "" : "bg-mural-creme"}`}
+                  className={`px-3 py-2 border-b border-mural-line last:border-0 ${n.read_at ? "" : "bg-mural-creme/60"}`}
                 >
                   <NotificationRow notif={n} />
                 </li>
@@ -181,20 +184,16 @@ function describeNotification(type: NotificationType, hasComment: boolean) {
 function NotificationRow({ notif }: { notif: NotificationWithActor }) {
   const actorName = notif.actor?.nickname ?? "Alguém";
   const { action, icon } = describeNotification(notif.type, !!notif.comment_id);
-  const avatarSeed = (
-    notif.actor?.avatar_seed ||
-    notif.actor?.nickname ||
-    "morador"
-  ).trim();
 
   return (
     <div className="flex items-start gap-2 text-xs">
-      <div className="w-8 h-8 bg-mural-brown retro-border overflow-hidden shrink-0">
-        <Image
-          src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent(avatarSeed)}`}
+      <div className="w-8 h-8 bg-mural-creme rounded-lg ring-1 ring-mural-line overflow-hidden shrink-0">
+        <Avatar
+          avatarPath={notif.actor?.avatar_path}
+          seed={notif.actor?.avatar_seed}
+          name={notif.actor?.nickname}
+          size={32}
           alt={`avatar de ${actorName}`}
-          width={32}
-          height={32}
         />
       </div>
       <div className="flex-1">

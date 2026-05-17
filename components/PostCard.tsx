@@ -8,7 +8,11 @@ import type { PostWithRelations } from "@/utils/types";
 import { EDIT_WINDOW_MS } from "@/utils/feed";
 import { postImageUrl } from "@/utils/storage";
 import { categoryMeta } from "@/utils/categories";
+import type { ReactionEmoji } from "@/utils/reactions";
+import { canModerate, type Role } from "@/utils/roles";
 import { deletePost, editPost } from "@/app/actions";
+import Avatar from "./Avatar";
+import RoleBadge from "./RoleBadge";
 import { PostInteractions } from "./Interactions";
 import { RenderWithMentions } from "./MentionsProvider";
 import MentionInput from "./MentionInput";
@@ -16,13 +20,19 @@ import MentionInput from "./MentionInput";
 export default function PostCard({
   post,
   user,
-  bgClass,
+  viewerRole,
   onCommentDeleted,
+  onReactionChange,
 }: {
   post: PostWithRelations;
   user: User | null;
-  bgClass: string;
+  viewerRole?: Role | null;
   onCommentDeleted?: (postId: number, commentId: number) => void;
+  onReactionChange?: (
+    postId: number,
+    userId: string,
+    emoji: ReactionEmoji,
+  ) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editError, setEditError] = useState("");
@@ -30,9 +40,6 @@ export default function PostCard({
   const [isDeleting, startDeleteTransition] = useTransition();
 
   const displayName = post.profiles?.nickname || post.author_name;
-  const avatarSeed = (
-    post.profiles?.avatar_seed || post.author_name
-  ).trim();
 
   const authorHref = post.profiles?.nickname
     ? `/perfil/${encodeURIComponent(post.profiles.nickname)}`
@@ -41,6 +48,9 @@ export default function PostCard({
   const cat = categoryMeta(post.category);
 
   const isOwner = !!user && user.id === post.user_id;
+  // Staff (moderador/admin) pode apagar recado de qualquer um.
+  const canMod = !!user && canModerate(viewerRole);
+  const canDelete = isOwner || canMod;
   const createdAtMs = new Date(post.created_at).getTime();
   const [withinEditWindow, setWithinEditWindow] = useState(
     () => Date.now() - createdAtMs < EDIT_WINDOW_MS,
@@ -55,12 +65,13 @@ export default function PostCard({
   }, [createdAtMs, withinEditWindow]);
 
   const avatar = (
-    <div className="w-10 h-10 bg-mural-brown retro-border overflow-hidden">
-      <Image
-        src={`https://api.dicebear.com/7.x/pixel-art/png?seed=${encodeURIComponent(avatarSeed)}`}
-        alt="avatar"
-        width={40}
-        height={40}
+    <div className="w-10 h-10 rounded-lg overflow-hidden ring-1 ring-mural-line border-b-2 border-mural-brown bg-mural-creme">
+      <Avatar
+        avatarPath={post.profiles?.avatar_path}
+        seed={post.profiles?.avatar_seed}
+        name={post.author_name}
+        size={40}
+        alt={`avatar de ${displayName}`}
       />
     </div>
   );
@@ -78,7 +89,10 @@ export default function PostCard({
   }
 
   function handleDelete() {
-    if (!confirm("Excluir esse recado? Essa ação não pode ser desfeita.")) {
+    const msg = isOwner
+      ? "Excluir esse recado? Essa ação não pode ser desfeita."
+      : "Excluir o recado deste morador como moderador? Essa ação não pode ser desfeita.";
+    if (!confirm(msg)) {
       return;
     }
     startDeleteTransition(async () => {
@@ -87,9 +101,12 @@ export default function PostCard({
   }
 
   return (
-    <article id={`recado-${post.id}`} className={`p-4 retro-border ${bgClass}`}>
-      <div className="flex justify-between items-start mb-2 gap-2">
-        <div className="flex gap-2 items-center">
+    <article
+      id={`recado-${post.id}`}
+      className="soft-card p-4"
+    >
+      <div className="flex justify-between items-start mb-3 gap-2">
+        <div className="flex gap-3 items-center">
           {authorHref ? (
             <Link href={authorHref} className="shrink-0">
               {avatar}
@@ -98,7 +115,7 @@ export default function PostCard({
             avatar
           )}
           <div>
-            <p className="font-bold">
+            <p className="font-bold text-mural-ink leading-tight flex items-center gap-1.5">
               {authorHref ? (
                 <Link href={authorHref} className="hover:underline">
                   {displayName}
@@ -106,26 +123,28 @@ export default function PostCard({
               ) : (
                 displayName
               )}
+              <RoleBadge role={post.profiles?.role} />
             </p>
-            <p className="text-[10px] opacity-60">
+            <p className="font-mono text-[11px] text-mural-ink/45">
               {new Date(post.created_at).toLocaleDateString("pt-BR")} às{" "}
               {new Date(post.created_at).toLocaleTimeString("pt-BR", {
                 hour: "2-digit",
                 minute: "2-digit",
               })}
             </p>
-            <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold bg-mural-creme retro-border">
+            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-mural-creme border border-mural-line text-mural-ink/70">
+              <span className="w-1.5 h-1.5 rounded-full bg-mural-brown" />
               {cat.icon} {cat.label}
             </span>
           </div>
         </div>
 
-        {isOwner && !isEditing && (
+        {canDelete && !isEditing && (
           <div className="flex gap-1 text-[10px] font-bold shrink-0">
-            {withinEditWindow && (
+            {isOwner && withinEditWindow && (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-2 py-1 bg-mural-creme retro-border hover:bg-white"
+                className="px-2 py-1 rounded-lg text-mural-ink/60 hover:bg-mural-creme"
                 disabled={isDeleting}
               >
                 ✏️ Editar
@@ -134,9 +153,12 @@ export default function PostCard({
             <button
               onClick={handleDelete}
               disabled={isDeleting}
-              className="px-2 py-1 bg-red-100 border-2 border-red-800 text-red-800 hover:bg-red-200 disabled:opacity-50"
+              title={
+                isOwner ? "Excluir recado" : "Excluir como moderador"
+              }
+              className="px-2 py-1 rounded-lg text-red-700 hover:bg-red-50 disabled:opacity-50"
             >
-              {isDeleting ? "..." : "🗑️ Excluir"}
+              {isDeleting ? "..." : "🗑️"}
             </button>
           </div>
         )}
@@ -151,10 +173,10 @@ export default function PostCard({
             defaultValue={post.content}
             required
             rows={3}
-            className="w-full p-2 bg-mural-creme border-2 border-mural-dark text-sm focus:outline-none"
+            className="w-full p-2 bg-mural-creme border border-mural-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-mural-brown/30"
           />
           {editError && (
-            <div className="bg-red-100 border-2 border-red-800 p-3 text-red-800 text-sm retro-border font-bold">
+            <div className="bg-red-100 border border-red-300 rounded-lg p-3 text-red-800 text-sm font-bold">
               ⚠️ {editError}
             </div>
           )}
@@ -162,7 +184,7 @@ export default function PostCard({
             <button
               type="submit"
               disabled={isSaving}
-              className="bg-mural-brown text-white px-3 py-1 retro-border disabled:opacity-50"
+              className="bg-mural-brown text-white px-4 py-1.5 rounded-lg disabled:opacity-50 retro-button-active"
             >
               {isSaving ? "Salvando..." : "💾 Salvar"}
             </button>
@@ -173,7 +195,7 @@ export default function PostCard({
                 setEditError("");
               }}
               disabled={isSaving}
-              className="bg-mural-creme px-3 py-1 retro-border"
+              className="bg-mural-creme border border-mural-line px-4 py-1.5 rounded-lg"
             >
               Cancelar
             </button>
@@ -181,7 +203,7 @@ export default function PostCard({
         </form>
       ) : (
         post.content && (
-          <p className="text-sm leading-relaxed mb-4 whitespace-pre-wrap">
+          <p className="text-sm leading-relaxed mb-4 whitespace-pre-wrap text-mural-ink/90">
             <RenderWithMentions text={post.content} />
           </p>
         )
@@ -200,7 +222,7 @@ export default function PostCard({
             width={1200}
             height={900}
             sizes="(max-width: 768px) 100vw, 28rem"
-            className="h-auto w-auto max-w-full max-h-112 object-contain bg-mural-creme retro-border"
+            className="h-auto w-auto max-w-full max-h-112 object-contain rounded-lg border border-mural-line bg-mural-creme"
           />
         </a>
       )}
@@ -211,11 +233,13 @@ export default function PostCard({
         comments={post.comments || []}
         isLoggedIn={!!user}
         currentUserId={user?.id ?? null}
+        viewerRole={viewerRole}
         onCommentDeleted={
           onCommentDeleted
             ? (commentId) => onCommentDeleted(post.id, commentId)
             : undefined
         }
+        onReactionChange={onReactionChange}
       />
     </article>
   );
