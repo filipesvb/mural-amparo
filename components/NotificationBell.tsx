@@ -5,12 +5,13 @@ import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/client";
 import type {
   Notification,
-  NotificationType,
   NotificationWithActor,
   Profile,
 } from "@/utils/types";
 import { markNotificationsRead } from "@/app/actions";
+import { describeNotification } from "@/utils/notifications.copy";
 import Avatar from "./Avatar";
+import PushManager from "./PushManager";
 
 const MAX_VISIBLE = 10;
 
@@ -137,6 +138,7 @@ export default function NotificationBell({
           <div className="bg-mural-creme px-3 py-2 border-b border-mural-line text-xs font-bold uppercase text-mural-ink/60">
             Notificações
           </div>
+          <PushManager />
           {notifications.length === 0 ? (
             <div className="p-4 text-xs italic opacity-60 text-center">
               Nada por aqui ainda.
@@ -157,28 +159,6 @@ export default function NotificationBell({
       )}
     </div>
   );
-}
-
-function describeNotification(type: NotificationType, hasComment: boolean) {
-  switch (type) {
-    case "like":
-      return { action: "curtiu seu recado", icon: "❤️" };
-    case "reaction":
-      return { action: "reagiu ao seu recado", icon: "😊" };
-    case "follow":
-      return { action: "começou a te seguir", icon: "👥" };
-    case "comment":
-      return { action: "comentou no seu recado", icon: "💬" };
-    case "reply":
-      return { action: "respondeu seu comentário", icon: "↩️" };
-    case "mention":
-      return {
-        action: hasComment
-          ? "te mencionou em um comentário"
-          : "te mencionou em um recado",
-        icon: "📣",
-      };
-  }
 }
 
 function NotificationRow({ notif }: { notif: NotificationWithActor }) {

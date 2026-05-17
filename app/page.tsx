@@ -69,7 +69,8 @@ export default async function Home({
         *,
         profiles (nickname, avatar_seed, avatar_path, role),
         reactions (user_id, emoji),
-        comments (*)
+        comments (*),
+        bookmarks (user_id)
       `,
       )
       .order("created_at", { ascending: false })

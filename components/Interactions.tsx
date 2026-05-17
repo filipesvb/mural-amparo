@@ -5,7 +5,9 @@ import {
   addComment,
   editComment,
   deleteComment,
+  toggleBookmark,
 } from "@/app/actions";
+import { useRouter } from "next/navigation";
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import type { Comment, Reaction } from "@/utils/types";
 import type { ReactionEmoji } from "@/utils/reactions";
@@ -42,6 +44,7 @@ export function PostInteractions({
   isLoggedIn,
   currentUserId,
   viewerRole,
+  bookmarked,
   onCommentDeleted,
   onReactionChange,
 }: {
@@ -51,6 +54,7 @@ export function PostInteractions({
   isLoggedIn: boolean;
   currentUserId: string | null;
   viewerRole?: Role | null;
+  bookmarked: boolean;
   onCommentDeleted?: (commentId: number) => void;
   onReactionChange?: (
     postId: number,
@@ -61,6 +65,27 @@ export function PostInteractions({
   const [showComments, setShowComments] = useState(false);
   const [commentError, setCommentError] = useState("");
   const [, startReactTransition] = useTransition();
+  const router = useRouter();
+
+  // Bookmark é por-usuário e privado: não vem por Realtime, então o estado
+  // é local e otimista (revertido se a action falhar).
+  const [isBookmarked, setIsBookmarked] = useState(bookmarked);
+  const [, startBookmarkTransition] = useTransition();
+
+  function handleBookmark() {
+    if (!isLoggedIn) return;
+    const previous = isBookmarked;
+    setIsBookmarked(!previous); // otimista
+    startBookmarkTransition(async () => {
+      const result = await toggleBookmark(postId);
+      if (result?.error) {
+        setIsBookmarked(previous); // reverte
+        return;
+      }
+      // Reflete a remoção em /perfil/salvos; no feed é barato (estado client).
+      router.refresh();
+    });
+  }
 
   // Reação não usa useOptimistic: a mudança é aplicada direto no estado
   // autoritativo do feed (onReactionChange) e persistida em background.
@@ -114,13 +139,37 @@ export function PostInteractions({
           );
         })}
 
-        <button
-          onClick={() => setShowComments(!showComments)}
-          className="ml-auto text-mural-ink/50 hover:text-mural-ink flex items-center gap-1 px-2 py-1"
-        >
-          💬 {optimisticComments.length}{" "}
-          {optimisticComments.length === 1 ? "comentário" : "comentários"}
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={handleBookmark}
+            disabled={!isLoggedIn}
+            title={
+              isLoggedIn
+                ? isBookmarked
+                  ? "Remover dos salvos"
+                  : "Salvar recado"
+                : "Entre para salvar"
+            }
+            className={`flex items-center gap-1 rounded-full border px-2.5 py-1 transition-colors ${
+              isBookmarked
+                ? "bg-mural-brown/15 border-mural-brown text-mural-ink"
+                : "bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme"
+            }`}
+          >
+            <span>🔖</span>
+            <span className="hidden sm:inline">
+              {isBookmarked ? "Salvo" : "Salvar"}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setShowComments(!showComments)}
+            className="text-mural-ink/50 hover:text-mural-ink flex items-center gap-1 px-2 py-1"
+          >
+            💬 {optimisticComments.length}{" "}
+            {optimisticComments.length === 1 ? "comentário" : "comentários"}
+          </button>
+        </div>
       </div>
 
       {showComments && (

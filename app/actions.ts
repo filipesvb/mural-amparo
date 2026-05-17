@@ -118,7 +118,8 @@ export async function loadMorePosts(
       *,
       profiles (nickname, avatar_seed, avatar_path, role),
       reactions (user_id, emoji),
-      comments (*)
+      comments (*),
+      bookmarks (user_id)
     `,
     )
     .lt("created_at", beforeCreatedAt);
@@ -417,6 +418,90 @@ export async function toggleFollow(targetUserId: string) {
   }
 
   revalidatePath("/");
+}
+
+// Inscrição do Push API serializada (JSON.parse(JSON.stringify(sub))).
+export type SerializedPushSubscription = {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+};
+
+export async function savePushSubscription(
+  sub: SerializedPushSubscription,
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
+    return { error: "Inscrição de push inválida." };
+  }
+
+  // Upsert por endpoint: o mesmo device re-assinando não duplica linha
+  // (e troca de dono se a pessoa logar com outra conta no mesmo navegador).
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    {
+      endpoint: sub.endpoint,
+      user_id: user.id,
+      p256dh: sub.keys.p256dh,
+      auth: sub.keys.auth,
+    },
+    { onConflict: "endpoint" },
+  );
+  if (error) {
+    console.error("Erro ao salvar inscrição de push:", error);
+    return { error: "Não foi possível ativar as notificações." };
+  }
+  return { success: true };
+}
+
+export async function deletePushSubscription(endpoint: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+  if (!endpoint) return { error: "Inscrição inválida." };
+
+  await supabase
+    .from("push_subscriptions")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("endpoint", endpoint);
+  return { success: true };
+}
+
+export async function toggleBookmark(postId: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  const { data: existing } = await supabase
+    .from("bookmarks")
+    .select("post_id")
+    .eq("user_id", user.id)
+    .eq("post_id", postId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("bookmarks")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("post_id", postId);
+  } else {
+    await supabase
+      .from("bookmarks")
+      .insert({ user_id: user.id, post_id: postId });
+  }
+
+  // Sem revalidatePath("/"): o feed guarda os posts em estado client e o
+  // botão alterna otimista. Só a página de salvos precisa refletir.
+  revalidatePath("/perfil/salvos");
 }
 
 export async function signOut() {

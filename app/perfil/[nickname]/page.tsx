@@ -44,7 +44,8 @@ export default async function PerfilPublicoPage({
       *,
       profiles (nickname, avatar_seed, avatar_path, role),
       reactions (user_id, emoji),
-      comments (*)
+      comments (*),
+      bookmarks (user_id)
     `,
     )
     .eq("user_id", profile.id)

@@ -69,7 +69,14 @@ export default function RealtimeFeed({
             .eq("id", newPost.user_id)
             .single();
           setPosts((prev) => [
-            { ...newPost, profiles: profile, reactions: [], comments: [] },
+            {
+              ...newPost,
+              profiles: profile,
+              reactions: [],
+              comments: [],
+              // Recado recém-criado: ninguém salvou ainda.
+              bookmarks: [],
+            },
             ...prev,
           ]);
         },

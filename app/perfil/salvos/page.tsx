@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import PostCard from "@/components/PostCard";
 import NotificationBell from "@/components/NotificationBell";
@@ -9,60 +9,55 @@ import { signOut } from "@/app/actions";
 import { fetchInitialNotifications } from "@/utils/notifications";
 import { collectMentionsFromPosts } from "@/utils/mentions";
 import { fetchValidMentions } from "@/utils/mentions.server";
-import { canonicalTag, hashtagMatchPattern } from "@/utils/hashtags";
 import type { PostWithRelations } from "@/utils/types";
 import { asRole } from "@/utils/roles";
 
-export default async function HashtagPage({
-  params,
-}: {
-  params: Promise<{ tag: string }>;
-}) {
-  const { tag: rawTag } = await params;
-  const tag = canonicalTag(decodeURIComponent(rawTag));
-
-  if (!/^[a-z0-9_]{2,30}$/.test(tag)) notFound();
-
+export default async function SalvosPage() {
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const { data: posts } = await supabase
-    .from("posts")
+  // bookmarks é privada (RLS escopada ao dono): este select já só traz os
+  // salvos do próprio usuário. posts é embed to-one (bookmarks.post_id).
+  const { data: rows } = await supabase
+    .from("bookmarks")
     .select(
       `
-      *,
-      profiles (nickname, avatar_seed, avatar_path, role),
-      reactions (user_id, emoji),
-      comments (*),
-      bookmarks (user_id)
+      created_at,
+      posts (
+        *,
+        profiles (nickname, avatar_seed, avatar_path, role),
+        reactions (user_id, emoji),
+        comments (*),
+        bookmarks (user_id)
+      )
     `,
     )
-    .filter("content", "imatch", hashtagMatchPattern(tag))
-    .order("created_at", { ascending: false })
-    .limit(50);
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
 
-  const postsList: PostWithRelations[] = posts ?? [];
+  const postsList: PostWithRelations[] = (
+    (rows ?? []) as unknown as { posts: PostWithRelations | null }[]
+  )
+    .map((r) => r.posts)
+    .filter((p): p is PostWithRelations => p != null);
 
-  const { notifications: initialNotifications, unreadCount } = user
-    ? await fetchInitialNotifications(user.id)
-    : { notifications: [], unreadCount: 0 };
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  const viewerRole = asRole(me?.role);
+
+  const { notifications: initialNotifications, unreadCount } =
+    await fetchInitialNotifications(user.id);
 
   const initialValidMentions = await fetchValidMentions(
     collectMentionsFromPosts(postsList),
   );
-
-  let viewerRole = asRole(null);
-  if (user) {
-    const { data: me } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    viewerRole = asRole(me?.role);
-  }
 
   return (
     <main className="min-h-screen p-3 md:p-6 flex justify-center">
@@ -75,47 +70,44 @@ export default async function HashtagPage({
             >
               ← Mural
             </Link>
-            <h1 className="text-lg mural-title text-mural-creme">#{tag}</h1>
+            <h1 className="text-lg mural-title text-mural-creme">
+              🔖 Recados salvos
+            </h1>
           </div>
 
           <div className="flex-1 mx-4 hidden md:flex justify-center">
             <SearchBar />
           </div>
 
-          {user ? (
-            <div className="flex items-center gap-3">
-              <NotificationBell
-                user={user}
-                initialNotifications={initialNotifications}
-                initialUnreadCount={unreadCount}
-              />
-              <form action={signOut}>
-                <button
-                  type="submit"
-                  className="bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 text-xs font-bold rounded-lg"
-                >
-                  Sair
-                </button>
-              </form>
-            </div>
-          ) : (
-            <Link
-              href="/login"
-              className="bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-4 py-1.5 rounded-lg text-xs font-bold"
-            >
-              Entrar 🔑
-            </Link>
-          )}
+          <div className="flex items-center gap-3">
+            <NotificationBell
+              user={user}
+              initialNotifications={initialNotifications}
+              initialUnreadCount={unreadCount}
+            />
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 text-xs font-bold rounded-lg"
+              >
+                Sair
+              </button>
+            </form>
+          </div>
         </header>
 
-        <section className="flex-1 p-4 space-y-4">
-          <h3 className="text-sm font-bold uppercase text-mural-ink/60 border-b border-mural-line pb-2">
-            🏷️ Recados com #{tag}
-          </h3>
+        <section className="bg-mural-panel/60 border-b border-mural-line px-6 py-4">
+          <p className="text-sm text-mural-ink/70">
+            Só você vê esta lista. Recados que você salvou para reler depois —
+            toque no 🔖 de novo para remover.
+          </p>
+        </section>
 
+        <section className="flex-1 p-4 space-y-4">
           {postsList.length === 0 ? (
             <div className="text-center p-8 text-mural-ink/40 italic">
-              Nenhum recado com #{tag} ainda.
+              Você ainda não salvou nenhum recado. Toque no 🔖 de um recado no
+              mural para guardá-lo aqui.
             </div>
           ) : (
             <MentionsProvider initialValidMentions={initialValidMentions}>

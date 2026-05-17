@@ -30,6 +30,11 @@ export type Comment = {
   parent_comment_id: number | null;
 };
 
+export type Bookmark = {
+  user_id: string;
+  post_id: number;
+};
+
 export type Post = {
   id: number;
   content: string;
@@ -47,6 +52,8 @@ export type PostWithRelations = Post & {
   > | null;
   reactions: Pick<Reaction, "user_id" | "emoji">[];
   comments: Comment[];
+  // RLS privada: vem só a linha do próprio usuário (vazio = não salvou).
+  bookmarks: Pick<Bookmark, "user_id">[];
 };
 
 export type NotificationType =

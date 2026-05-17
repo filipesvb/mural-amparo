@@ -234,6 +234,7 @@ export default function PostCard({
         isLoggedIn={!!user}
         currentUserId={user?.id ?? null}
         viewerRole={viewerRole}
+        bookmarked={(post.bookmarks?.length ?? 0) > 0}
         onCommentDeleted={
           onCommentDeleted
             ? (commentId) => onCommentDeleted(post.id, commentId)
