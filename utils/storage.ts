@@ -4,6 +4,10 @@ export const AVATARS_BUCKET = "avatars";
 
 export const MAX_POST_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
+// Teto de imagens por recado (galeria). Barreira de produto/custo: cada
+// imagem é um arquivo no Storage e peso no payload do feed.
+export const MAX_POST_IMAGES = 4;
+
 export const ALLOWED_POST_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
@@ -37,6 +41,24 @@ export function isOwnedImagePath(
   if (!value.startsWith(`${userId}/`)) return false;
   const ext = value.split(".").pop()?.toLowerCase();
   return !!ext && ALLOWED_IMAGE_EXTENSIONS.includes(ext);
+}
+
+// Valida a lista de caminhos vinda do cliente (galeria). Devolve a lista
+// se TODOS pertencem à pasta do próprio usuário e o teto é respeitado;
+// null se veio algo inválido (o app pede reenvio em vez de gravar lixo).
+// A RLS do bucket continua sendo a barreira definitiva.
+export function ownedImagePaths(
+  values: unknown[],
+  userId: string,
+): string[] | null {
+  if (values.length === 0) return [];
+  if (values.length > MAX_POST_IMAGES) return null;
+  const out: string[] = [];
+  for (const v of values) {
+    if (!isOwnedImagePath(v, userId)) return null;
+    out.push(v);
+  }
+  return out;
 }
 
 // Monta a URL pública do objeto. Bucket é público, então a URL é fixa e

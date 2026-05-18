@@ -40,9 +40,42 @@ export async function uploadImage(
   return { path };
 }
 
+// Sobe a galeria inteira em paralelo. Se qualquer arquivo falhar (formato,
+// tamanho ou rede), remove os que já subiram e devolve o erro — nada de
+// galeria pela metade nem arquivo órfão no Storage.
+export async function uploadImages(
+  bucket: string,
+  userId: string,
+  files: File[],
+): Promise<{ paths: string[] } | { error: string }> {
+  const results = await Promise.all(
+    files.map((f) => uploadImage(bucket, userId, f)),
+  );
+  const paths: string[] = [];
+  let firstError: string | null = null;
+  for (const r of results) {
+    if ("error" in r) {
+      if (!firstError) firstError = r.error;
+    } else {
+      paths.push(r.path);
+    }
+  }
+  if (firstError) {
+    if (paths.length) await removeImages(bucket, paths);
+    return { error: firstError };
+  }
+  return { paths };
+}
+
 // Best-effort: usado pra limpar o arquivo recém-enviado quando a Server
 // Action falha depois do upload (rate limit, validação, erro no insert).
 export async function removeImage(bucket: string, path: string) {
   const supabase = createClient();
   await supabase.storage.from(bucket).remove([path]);
+}
+
+export async function removeImages(bucket: string, paths: string[]) {
+  if (paths.length === 0) return;
+  const supabase = createClient();
+  await supabase.storage.from(bucket).remove(paths);
 }

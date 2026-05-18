@@ -8,13 +8,16 @@ import type { Profile } from "@/utils/types";
 import {
   ALLOWED_POST_IMAGE_TYPES,
   MAX_POST_IMAGE_BYTES,
+  MAX_POST_IMAGES,
   POST_IMAGES_BUCKET,
 } from "@/utils/storage";
-import { uploadImage, removeImage } from "@/utils/upload.client";
+import { uploadImages, removeImages } from "@/utils/upload.client";
 import { POST_CATEGORIES, DEFAULT_CATEGORY } from "@/utils/categories";
 import Avatar from "./Avatar";
 import HoneypotField from "./HoneypotField";
 import MentionInput from "./MentionInput";
+
+type Picked = { file: File; previewUrl: string };
 
 export default function CreatePostWidget({
   user,
@@ -24,44 +27,81 @@ export default function CreatePostWidget({
   profile: Profile | null;
 }) {
   const [error, setError] = useState("");
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [picked, setPicked] = useState<Picked[]>([]);
   const [isFocused, setIsFocused] = useState(false);
   const [pending, setPending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  function clearImage() {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setSelectedFile(null);
+  // Espelha picked pra revogar os object URLs no unmount sem recriar o efeito.
+  const pickedRef = useRef<Picked[]>([]);
+  useEffect(() => {
+    pickedRef.current = picked;
+  }, [picked]);
+  useEffect(() => {
+    return () => {
+      pickedRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    };
+  }, []);
+
+  function clearImages() {
+    picked.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    setPicked([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removeAt(index: number) {
+    setPicked((prev) => {
+      const target = prev[index];
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     setError("");
-    const file = e.target.files?.[0];
-    if (!file) {
-      clearImage();
-      return;
+    const files = Array.from(e.target.files ?? []);
+    // Permite o mesmo input vazio (cancelou o seletor) sem zerar o que já
+    // foi escolhido — a remoção é feita pelo ✕ de cada miniatura.
+    if (files.length === 0) return;
+
+    const accepted: Picked[] = [];
+    for (const file of files) {
+      if (
+        !(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)
+      ) {
+        setError("Formato inválido. Use JPG, PNG, WebP ou GIF.");
+        continue;
+      }
+      if (file.size > MAX_POST_IMAGE_BYTES) {
+        setError("Cada imagem deve ter no máximo 5 MB.");
+        continue;
+      }
+      accepted.push({ file, previewUrl: URL.createObjectURL(file) });
     }
-    if (!(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)) {
-      setError("Formato inválido. Use JPG, PNG, WebP ou GIF.");
-      clearImage();
-      return;
-    }
-    if (file.size > MAX_POST_IMAGE_BYTES) {
-      setError("Imagem muito grande. O limite é 5 MB.");
-      clearImage();
-      return;
-    }
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setSelectedFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+
+    setPicked((prev) => {
+      const room = MAX_POST_IMAGES - prev.length;
+      if (room <= 0) {
+        accepted.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+        setError(`Máximo de ${MAX_POST_IMAGES} imagens por recado.`);
+        return prev;
+      }
+      if (accepted.length > room) {
+        accepted
+          .slice(room)
+          .forEach((p) => URL.revokeObjectURL(p.previewUrl));
+        setError(`Máximo de ${MAX_POST_IMAGES} imagens por recado.`);
+      }
+      return [...prev, ...accepted.slice(0, room)];
+    });
+    // Zera o input pra permitir re-selecionar o mesmo arquivo depois.
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   function reset() {
-    clearImage();
+    clearImages();
     setError("");
   }
 
@@ -131,41 +171,45 @@ export default function CreatePostWidget({
     </div>
   );
 
+  const atLimit = picked.length >= MAX_POST_IMAGES;
+
   return (
     <form
       action={async (formData) => {
         setError("");
         setPending(true);
-        let uploadedPath: string | null = null;
+        let uploadedPaths: string[] = [];
         try {
-          // Sobe a imagem direto do navegador (a Server Action recebe só o
-          // caminho — a Vercel barra arquivos grandes no payload da action).
-          if (selectedFile) {
-            const up = await uploadImage(
+          // Sobe as imagens direto do navegador (a Server Action recebe só os
+          // caminhos — a Vercel barra arquivos grandes no payload da action).
+          if (picked.length > 0) {
+            const up = await uploadImages(
               POST_IMAGES_BUCKET,
               user.id,
-              selectedFile,
+              picked.map((p) => p.file),
             );
             if ("error" in up) {
               setError(up.error);
               return;
             }
-            uploadedPath = up.path;
-            formData.set("image_path", up.path);
+            uploadedPaths = up.paths;
+            for (const path of up.paths) {
+              formData.append("image_paths", path);
+            }
           }
           const result = await createPost(formData);
           if (result?.error) {
-            // Não deixa a imagem órfã se o recado não foi publicado.
-            if (uploadedPath) {
-              await removeImage(POST_IMAGES_BUCKET, uploadedPath);
+            // Não deixa imagem órfã se o recado não foi publicado.
+            if (uploadedPaths.length) {
+              await removeImages(POST_IMAGES_BUCKET, uploadedPaths);
             }
             setError(result.error);
             return;
           }
           reset();
         } catch {
-          if (uploadedPath) {
-            await removeImage(POST_IMAGES_BUCKET, uploadedPath);
+          if (uploadedPaths.length) {
+            await removeImages(POST_IMAGES_BUCKET, uploadedPaths);
           }
           setError("Algo deu errado. Tente novamente.");
         } finally {
@@ -206,30 +250,46 @@ export default function CreatePostWidget({
           value={profile?.nickname || user.email?.split("@")[0]}
         />
 
-        {previewUrl && (
-          <div className="relative inline-block">
-            <Image
-              src={previewUrl}
-              alt="Pré-visualização da imagem"
-              width={1200}
-              height={900}
-              unoptimized
-              className="h-auto w-auto max-w-full max-h-80 object-contain rounded-lg border border-mural-line bg-mural-creme"
-            />
-            <button
-              type="button"
-              onClick={clearImage}
-              className="absolute top-1 right-1 bg-red-700/90 text-white text-xs font-bold px-2 py-1 rounded-lg"
-            >
-              ✕ Remover
-            </button>
+        {picked.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {picked.map((p, i) => (
+              <div
+                key={p.previewUrl}
+                className="relative aspect-square rounded-lg overflow-hidden border border-mural-line bg-mural-creme"
+              >
+                <Image
+                  src={p.previewUrl}
+                  alt={`Pré-visualização ${i + 1}`}
+                  fill
+                  unoptimized
+                  sizes="120px"
+                  className="object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeAt(i)}
+                  aria-label={`Remover imagem ${i + 1}`}
+                  className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-700/90 text-white text-xs font-bold rounded-lg"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
         <div className="flex items-center gap-2">
           <label
-            title="Anexar imagem"
-            className="flex items-center justify-center w-9 h-9 rounded-lg bg-mural-creme border border-mural-line hover:bg-white cursor-pointer text-mural-ink/55 hover:text-mural-ink transition-colors shrink-0"
+            title={
+              atLimit
+                ? `Máximo de ${MAX_POST_IMAGES} imagens`
+                : "Anexar imagens"
+            }
+            className={`relative flex items-center justify-center w-9 h-9 rounded-lg border border-mural-line transition-colors shrink-0 ${
+              atLimit
+                ? "bg-mural-creme/60 text-mural-ink/25 cursor-not-allowed"
+                : "bg-mural-creme hover:bg-white cursor-pointer text-mural-ink/55 hover:text-mural-ink"
+            }`}
           >
             <svg
               className="w-5 h-5"
@@ -245,11 +305,18 @@ export default function CreatePostWidget({
                 d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
+            {picked.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 flex items-center justify-center bg-mural-brown text-white text-[10px] font-bold rounded-full">
+                {picked.length}
+              </span>
+            )}
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept={ALLOWED_POST_IMAGE_TYPES.join(",")}
               onChange={handleFileChange}
+              disabled={atLimit}
               className="hidden"
             />
           </label>

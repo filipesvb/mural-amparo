@@ -12,6 +12,7 @@ import {
   POST_IMAGES_BUCKET,
   AVATARS_BUCKET,
   isOwnedImagePath,
+  ownedImagePaths,
 } from "@/utils/storage";
 import { isReactionEmoji, type ReactionEmoji } from "@/utils/reactions";
 import { asRole, canModerate, isAdmin } from "@/utils/roles";
@@ -188,18 +189,17 @@ export async function createPost(formData: FormData) {
   const categoryRaw = formData.get("category");
   const category = isPostCategory(categoryRaw) ? categoryRaw : DEFAULT_CATEGORY;
 
-  // A imagem já subiu pro Storage no navegador (ver utils/upload.client.ts);
-  // aqui chega só o caminho. Validamos que ele pertence à pasta do próprio
-  // usuário — a RLS do bucket é a barreira definitiva.
-  const imagePathRaw = formData.get("image_path");
-  const image_path = isOwnedImagePath(imagePathRaw, user.id)
-    ? imagePathRaw
-    : null;
-  if (imagePathRaw && !image_path) {
+  // As imagens já subiram pro Storage no navegador (ver
+  // utils/upload.client.ts); aqui chegam só os caminhos. Validamos que todos
+  // pertencem à pasta do próprio usuário — a RLS do bucket é a barreira
+  // definitiva.
+  const imagePathsRaw = formData.getAll("image_paths");
+  const image_paths = ownedImagePaths(imagePathsRaw, user.id);
+  if (image_paths === null) {
     return { error: "Imagem inválida. Tente enviar novamente." };
   }
 
-  if (!content && !image_path)
+  if (!content && image_paths.length === 0)
     return { error: "Escreva um recado ou anexe uma imagem." };
 
   const postRate = await checkRateLimit(
@@ -219,7 +219,7 @@ export async function createPost(formData: FormData) {
       content,
       author_name,
       user_id: user.id,
-      image_path,
+      image_paths,
       category,
     },
   ]);
@@ -570,7 +570,7 @@ export async function deletePost(postId: number) {
 
   const { data: post } = await supabase
     .from("posts")
-    .select("user_id, image_path")
+    .select("user_id, image_paths")
     .eq("id", postId)
     .single();
   if (!post) return { error: "Recado não encontrado." };
@@ -590,18 +590,19 @@ export async function deletePost(postId: number) {
     return { error: "Não foi possível excluir o recado." };
   }
 
-  // Remove o arquivo do Storage depois que a linha some (best-effort).
+  // Remove os arquivos do Storage depois que a linha some (best-effort).
   // A RLS de DELETE em storage.objects não retorna erro quando bloqueia:
   // o Supabase só devolve data: [] (zero objetos removidos). Por isso
   // checamos o data, não só o error.
-  if (post.image_path) {
+  const imagePaths = (post.image_paths ?? []) as string[];
+  if (imagePaths.length > 0) {
     const { data: removed, error: removeError } = await supabase.storage
       .from(POST_IMAGES_BUCKET)
-      .remove([post.image_path]);
+      .remove(imagePaths);
     if (removeError || !removed || removed.length === 0) {
       console.error(
-        "Falha ao remover imagem do Storage (verifique a policy de DELETE):",
-        post.image_path,
+        "Falha ao remover imagens do Storage (verifique a policy de DELETE):",
+        imagePaths,
         removeError,
       );
     }

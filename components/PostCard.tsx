@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import type { User } from "@supabase/supabase-js";
@@ -12,6 +11,7 @@ import type { ReactionEmoji } from "@/utils/reactions";
 import { canModerate, type Role } from "@/utils/roles";
 import { deletePost, editPost } from "@/app/actions";
 import Avatar from "./Avatar";
+import PostGallery from "./PostGallery";
 import ImageLightbox from "./ImageLightbox";
 import RoleBadge from "./RoleBadge";
 import { PostInteractions } from "./Interactions";
@@ -36,7 +36,7 @@ export default function PostCard({
   ) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [showImage, setShowImage] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [editError, setEditError] = useState("");
   const [isSaving, startSaveTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
@@ -48,6 +48,11 @@ export default function PostCard({
     : null;
 
   const cat = categoryMeta(post.category);
+
+  // Resiliente a posts antigos / payloads sem o campo (mesmo padrão de
+  // post.reactions || [] abaixo). A galeria só aparece após rodar a
+  // migração notas/creating_post_gallery_schema.sql no Supabase.
+  const imagePaths = post.image_paths ?? [];
 
   const isOwner = !!user && user.id === post.user_id;
   // Staff (moderador/admin) pode apagar recado de qualquer um.
@@ -211,28 +216,17 @@ export default function PostCard({
         )
       )}
 
-      {post.image_path && (
+      {imagePaths.length > 0 && (
         <>
-          <button
-            type="button"
-            onClick={() => setShowImage(true)}
-            aria-label="Abrir imagem do recado"
-            className="inline-block mb-4 cursor-zoom-in"
-          >
-            <Image
-              src={postImageUrl(post.image_path)}
-              alt="Imagem do recado"
-              width={1200}
-              height={900}
-              sizes="(max-width: 768px) 100vw, 28rem"
-              className="h-auto w-auto max-w-full max-h-112 object-contain rounded-lg border border-mural-line bg-mural-creme"
-            />
-          </button>
-          {showImage && (
+          <PostGallery
+            paths={imagePaths}
+            onOpen={(i) => setLightboxIndex(i)}
+          />
+          {lightboxIndex !== null && (
             <ImageLightbox
-              src={postImageUrl(post.image_path)}
-              alt="Imagem do recado"
-              onClose={() => setShowImage(false)}
+              images={imagePaths.map(postImageUrl)}
+              startIndex={lightboxIndex}
+              onClose={() => setLightboxIndex(null)}
             />
           )}
         </>

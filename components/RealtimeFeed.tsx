@@ -71,6 +71,8 @@ export default function RealtimeFeed({
           setPosts((prev) => [
             {
               ...newPost,
+              // Realtime pode entregar array nulo/ausente; normaliza p/ [].
+              image_paths: newPost.image_paths ?? [],
               profiles: profile,
               reactions: [],
               comments: [],

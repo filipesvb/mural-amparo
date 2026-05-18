@@ -41,7 +41,8 @@ export type Post = {
   author_name: string;
   user_id: string;
   created_at: string;
-  image_path: string | null;
+  // Galeria ordenada (0..MAX_POST_IMAGES). Array vazio = recado sem imagem.
+  image_paths: string[];
   category: PostCategory;
 };
 
