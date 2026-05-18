@@ -4,17 +4,17 @@ Rode isto **antes de fazer o deploy no Vercel**:
 
 ## Code
 
-- [ ] `npm run build` passa sem erros
-- [ ] `npm run lint` passa sem warnings/errors
-- [ ] Testou login/signup
-- [ ] Testou postar + editar + deletar
-- [ ] Testou curte/reações/comentários
-- [ ] Testou filtros de categoria e "Seguindo"
-- [ ] Testou mencionar alguém com @
-- [ ] Testou seguir usuário
-- [ ] Testou salvos (bookmarks) — botão 🔖 funciona
-- [ ] Testou perfil público de outro usuário
-- [ ] Nenhum `console.error()` na aba Console do DevTools
+- [x] `npm run build` passa sem erros
+- [x] `npm run lint` passa sem warnings/errors
+- [x] Testou login/signup
+- [x] Testou postar + editar + deletar
+- [x] Testou curte/reações/comentários
+- [x] Testou filtros de categoria e "Seguindo"
+- [x] Testou mencionar alguém com @
+- [x] Testou seguir usuário
+- [x] Testou salvos (bookmarks) — botão 🔖 funciona
+- [x] Testou perfil público de outro usuário
+- [x] Nenhum `console.error()` na aba Console do DevTools
 
 ## Database (Supabase)
 

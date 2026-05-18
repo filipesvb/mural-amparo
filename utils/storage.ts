@@ -22,6 +22,23 @@ export function postImageExtension(mimeType: string): string | null {
   return EXT_BY_TYPE[mimeType] ?? null;
 }
 
+export const ALLOWED_IMAGE_EXTENSIONS = Object.values(EXT_BY_TYPE);
+
+// O upload da imagem agora acontece no navegador (direto pro Supabase
+// Storage); a Server Action recebe só o caminho. Esta validação garante,
+// no servidor, que o caminho pertence à pasta do próprio usuário e tem
+// extensão permitida — a RLS do bucket é a barreira definitiva.
+export function isOwnedImagePath(
+  value: unknown,
+  userId: string,
+): value is string {
+  if (typeof value !== "string" || value.length === 0) return false;
+  if (value.includes("..")) return false;
+  if (!value.startsWith(`${userId}/`)) return false;
+  const ext = value.split(".").pop()?.toLowerCase();
+  return !!ext && ALLOWED_IMAGE_EXTENSIONS.includes(ext);
+}
+
 // Monta a URL pública do objeto. Bucket é público, então a URL é fixa e
 // não expira — não precisa assinar nada.
 export function postImageUrl(imagePath: string): string {

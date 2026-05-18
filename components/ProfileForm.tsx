@@ -7,13 +7,16 @@ import Avatar from "./Avatar";
 import {
   ALLOWED_POST_IMAGE_TYPES,
   MAX_POST_IMAGE_BYTES,
+  AVATARS_BUCKET,
 } from "@/utils/storage";
+import { uploadImage, removeImage } from "@/utils/upload.client";
 import type { Profile } from "@/utils/types";
 
 export default function ProfileForm({ profile }: { profile: Profile | null }) {
   const [nickname, setNickname] = useState(profile?.nickname || "");
   const [seed, setSeed] = useState(profile?.avatar_seed || "");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -26,6 +29,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
   function clearFile() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
+    setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -47,6 +51,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
       return;
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setRemoveAvatar(false);
   }
@@ -59,9 +64,35 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
   async function handleSubmit(formData: FormData) {
     setError("");
     startTransition(async () => {
-      const result = await updateProfile(formData);
-      if (result?.error) {
-        setError(result.error);
+      let uploadedPath: string | null = null;
+      try {
+        // Sobe a foto direto do navegador; a Server Action recebe só o
+        // caminho (a Vercel barra arquivos grandes no payload da action).
+        if (selectedFile) {
+          if (!profile?.id) {
+            setError("Recarregue a página e tente novamente.");
+            return;
+          }
+          const up = await uploadImage(
+            AVATARS_BUCKET,
+            profile.id,
+            selectedFile,
+          );
+          if ("error" in up) {
+            setError(up.error);
+            return;
+          }
+          uploadedPath = up.path;
+          formData.set("avatar_path", up.path);
+        }
+        const result = await updateProfile(formData);
+        if (result?.error) {
+          if (uploadedPath) await removeImage(AVATARS_BUCKET, uploadedPath);
+          setError(result.error);
+        }
+      } catch {
+        if (uploadedPath) await removeImage(AVATARS_BUCKET, uploadedPath);
+        setError("Algo deu errado. Tente novamente.");
       }
     });
   }
@@ -110,7 +141,6 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
         <input
           ref={fileInputRef}
           type="file"
-          name="avatar"
           accept="image/jpeg,image/png,image/webp,image/gif"
           onChange={handleFileChange}
           className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:border-2 file:border-mural-dark file:bg-mural-creme file:text-mural-dark file:font-bold file:cursor-pointer"

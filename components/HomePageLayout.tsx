@@ -80,33 +80,36 @@ export default function HomePageLayout({
     <main className="h-screen overflow-hidden p-3 md:p-6 flex justify-center items-start">
       <div className="w-full max-w-6xl bg-mural-creme border border-mural-line rounded-2xl shadow-md flex flex-col overflow-hidden h-full">
         {/* Header */}
-        <header className="wood-header shrink-0 px-5 py-4 flex items-center gap-4">
+        <header className="wood-header shrink-0 px-3 md:px-5 py-4 flex items-center gap-2 md:gap-4">
           <MobileMenuButton
             isOpen={isMenuOpen}
             onToggle={() => setIsMenuOpen(!isMenuOpen)}
           />
 
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="bg-mural-creme rounded-xl p-1.5 shadow-sm">
+          <div className="flex items-center gap-2 md:gap-3 shrink-0">
+            <div className="bg-mural-creme rounded-xl p-1 md:p-1.5 shadow-sm shrink-0">
               <Image
                 src="/construcao-amparo-logo.png"
                 width={56}
                 height={48}
                 alt="Logo Mural Amparo"
+                className="w-10 h-auto md:w-14"
               />
             </div>
             <div className="leading-tight">
-              <h1 className="text-2xl text-mural-creme mural-title">
+              <h1 className="text-lg md:text-2xl text-mural-creme mural-title">
                 Mural Amparo
               </h1>
-              <p className="text-[11px] italic text-mural-creme/80">
+              <p className="hidden md:block text-[11px] italic text-mural-creme/80">
                 Um pedaço da cidade no seu bolso
               </p>
             </div>
           </div>
 
-          <div className="flex-1 hidden md:flex justify-center">
-            <SearchBar />
+          <div className="flex-1 flex justify-center min-w-0">
+            <div className="hidden md:block w-full max-w-md">
+              <SearchBar />
+            </div>
           </div>
 
           <div className="flex items-center gap-3 text-mural-creme shrink-0">
@@ -178,6 +181,11 @@ export default function HomePageLayout({
                     />
                   </svg>
                 </button>
+              </div>
+
+              {/* Busca no menu mobile (no desktop ela já fica no header) */}
+              <div className="md:hidden">
+                <SearchBar onNavigate={closeMenu} />
               </div>
 
               <SidebarNav

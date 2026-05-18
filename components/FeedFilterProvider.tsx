@@ -6,6 +6,7 @@ import {
   useContext,
   useMemo,
   useState,
+  useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
 import type { PostCategory } from "@/utils/categories";
@@ -16,6 +17,9 @@ type FeedFilterValue = {
   category: PostCategory | null;
   feed: FeedScope;
   isLoggedIn: boolean;
+  // true enquanto a lista re-renderiza após troca de filtro/escopo —
+  // alimenta o feedback visual (o feed esmaece por um instante).
+  isPending: boolean;
   setCategory: (category: PostCategory | null) => void;
   setFeed: (feed: FeedScope) => void;
 };
@@ -45,6 +49,7 @@ export function FeedFilterProvider({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [category, setCategoryState] = useState<PostCategory | null>(
     initialCategory,
   );
@@ -61,8 +66,8 @@ export function FeedFilterProvider({
 
   const setCategory = useCallback(
     (next: PostCategory | null) => {
-      setCategoryState(next);
       syncUrl(feed, next);
+      startTransition(() => setCategoryState(next));
     },
     [feed, syncUrl],
   );
@@ -75,16 +80,18 @@ export function FeedFilterProvider({
         return;
       }
       // Trocar de feed limpa a categoria (mesma UX dos links antigos).
-      setFeedState(next);
-      setCategoryState(null);
       syncUrl(next, null);
+      startTransition(() => {
+        setFeedState(next);
+        setCategoryState(null);
+      });
     },
     [isLoggedIn, router, syncUrl],
   );
 
   const value = useMemo<FeedFilterValue>(
-    () => ({ category, feed, isLoggedIn, setCategory, setFeed }),
-    [category, feed, isLoggedIn, setCategory, setFeed],
+    () => ({ category, feed, isLoggedIn, isPending, setCategory, setFeed }),
+    [category, feed, isLoggedIn, isPending, setCategory, setFeed],
   );
 
   return (

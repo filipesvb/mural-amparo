@@ -8,7 +8,9 @@ import type { Profile } from "@/utils/types";
 import {
   ALLOWED_POST_IMAGE_TYPES,
   MAX_POST_IMAGE_BYTES,
+  POST_IMAGES_BUCKET,
 } from "@/utils/storage";
+import { uploadImage, removeImage } from "@/utils/upload.client";
 import { POST_CATEGORIES, DEFAULT_CATEGORY } from "@/utils/categories";
 import Avatar from "./Avatar";
 import HoneypotField from "./HoneypotField";
@@ -23,13 +25,16 @@ export default function CreatePostWidget({
 }) {
   const [error, setError] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [pending, setPending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   function clearImage() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
+    setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -51,6 +56,7 @@ export default function CreatePostWidget({
       return;
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
   }
 
@@ -61,7 +67,6 @@ export default function CreatePostWidget({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      const textareaContainer = event.currentTarget;
       if (
         containerRef.current &&
         !containerRef.current.contains(event.target as Node)
@@ -78,6 +83,42 @@ export default function CreatePostWidget({
     }
   }, [isFocused]);
 
+  // Se o morador não estiver logado, o widget vira um convite pra entrar.
+  // Nada de avatar gerado aleatório aqui — só um marcador neutro.
+  if (!user) {
+    return (
+      <a
+        href="/login"
+        className="soft-card p-3 md:p-4 flex items-center justify-between gap-2 hover:bg-mural-creme transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg ring-1 ring-mural-line bg-mural-creme shrink-0 flex items-center justify-center text-mural-ink/35">
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+          </div>
+          <span className="text-mural-ink/45 italic text-sm md:text-base">
+            Entre para postar um recado...
+          </span>
+        </div>
+        <span className="bg-mural-brown text-white px-4 py-2 rounded-lg text-xs md:text-sm font-bold shrink-0">
+          Entrar
+        </span>
+      </a>
+    );
+  }
+
   const avatar = (
     <div className="w-10 h-10 rounded-lg overflow-hidden ring-1 ring-mural-line bg-mural-creme shrink-0">
       <Avatar
@@ -90,46 +131,53 @@ export default function CreatePostWidget({
     </div>
   );
 
-  // Se o morador não estiver logado, o botão leva para o login
-  if (!user) {
-    return (
-      <a
-        href="/login"
-        className="soft-card p-3 md:p-4 flex items-center justify-between gap-2 hover:bg-mural-creme transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          {avatar}
-          <span className="text-mural-ink/45 italic text-sm md:text-base">
-            Entre para postar um recado...
-          </span>
-        </div>
-        <span className="bg-mural-brown text-white px-4 py-2 rounded-lg text-xs md:text-sm font-bold shrink-0">
-          🔑 Entrar
-        </span>
-      </a>
-    );
-  }
-
   return (
     <form
       action={async (formData) => {
         setError("");
-        const result = await createPost(formData);
-        if (result?.error) {
-          setError(result.error);
-          return;
+        setPending(true);
+        let uploadedPath: string | null = null;
+        try {
+          // Sobe a imagem direto do navegador (a Server Action recebe só o
+          // caminho — a Vercel barra arquivos grandes no payload da action).
+          if (selectedFile) {
+            const up = await uploadImage(
+              POST_IMAGES_BUCKET,
+              user.id,
+              selectedFile,
+            );
+            if ("error" in up) {
+              setError(up.error);
+              return;
+            }
+            uploadedPath = up.path;
+            formData.set("image_path", up.path);
+          }
+          const result = await createPost(formData);
+          if (result?.error) {
+            // Não deixa a imagem órfã se o recado não foi publicado.
+            if (uploadedPath) {
+              await removeImage(POST_IMAGES_BUCKET, uploadedPath);
+            }
+            setError(result.error);
+            return;
+          }
+          reset();
+        } catch {
+          if (uploadedPath) {
+            await removeImage(POST_IMAGES_BUCKET, uploadedPath);
+          }
+          setError("Algo deu errado. Tente novamente.");
+        } finally {
+          setPending(false);
         }
-        reset();
       }}
       className="soft-card p-3 md:p-4 space-y-3"
     >
       <HoneypotField />
       <div className="flex items-flex-start gap-3">
         {avatar}
-        <div
-          className="flex-1"
-          onFocus={() => setIsFocused(true)}
-        >
+        <div className="flex-1" onFocus={() => setIsFocused(true)}>
           <MentionInput
             as="textarea"
             name="content"
@@ -181,13 +229,25 @@ export default function CreatePostWidget({
         <div className="flex items-center gap-2">
           <label
             title="Anexar imagem"
-            className="flex items-center justify-center w-9 h-9 rounded-lg bg-mural-creme border border-mural-line hover:bg-white cursor-pointer text-lg transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-lg bg-mural-creme border border-mural-line hover:bg-white cursor-pointer text-mural-ink/55 hover:text-mural-ink transition-colors shrink-0"
           >
-            🖼️
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.75}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
             <input
               ref={fileInputRef}
               type="file"
-              name="image"
               accept={ALLOWED_POST_IMAGE_TYPES.join(",")}
               onChange={handleFileChange}
               className="hidden"
@@ -197,20 +257,22 @@ export default function CreatePostWidget({
           <select
             name="category"
             defaultValue={DEFAULT_CATEGORY}
-            className="px-2 py-1 text-sm bg-mural-creme border border-mural-line rounded-lg focus:outline-none"
+            aria-label="Categoria do recado"
+            className="flex-1 min-w-0 px-3 py-2 text-sm bg-mural-creme border border-mural-line rounded-lg focus:outline-none focus:ring-2 focus:ring-mural-brown/30"
           >
             {POST_CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>
-                {c.icon} {c.label}
+                {c.label}
               </option>
             ))}
           </select>
 
           <button
             type="submit"
-            className="ml-auto bg-mural-brown text-white px-4 md:px-6 py-2 text-sm md:text-base font-bold rounded-lg retro-button-active shrink-0"
+            disabled={pending}
+            className="bg-mural-brown text-white px-4 md:px-6 py-2 text-sm md:text-base font-bold rounded-lg retro-button-active shrink-0 disabled:opacity-60"
           >
-            + Escrever
+            {pending ? "Enviando..." : "+ Escrever"}
           </button>
         </div>
       </div>

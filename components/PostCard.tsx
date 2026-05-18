@@ -12,6 +12,7 @@ import type { ReactionEmoji } from "@/utils/reactions";
 import { canModerate, type Role } from "@/utils/roles";
 import { deletePost, editPost } from "@/app/actions";
 import Avatar from "./Avatar";
+import ImageLightbox from "./ImageLightbox";
 import RoleBadge from "./RoleBadge";
 import { PostInteractions } from "./Interactions";
 import { RenderWithMentions } from "./MentionsProvider";
@@ -35,6 +36,7 @@ export default function PostCard({
   ) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showImage, setShowImage] = useState(false);
   const [editError, setEditError] = useState("");
   const [isSaving, startSaveTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
@@ -210,21 +212,30 @@ export default function PostCard({
       )}
 
       {post.image_path && (
-        <a
-          href={postImageUrl(post.image_path)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mb-4"
-        >
-          <Image
-            src={postImageUrl(post.image_path)}
-            alt="Imagem do recado"
-            width={1200}
-            height={900}
-            sizes="(max-width: 768px) 100vw, 28rem"
-            className="h-auto w-auto max-w-full max-h-112 object-contain rounded-lg border border-mural-line bg-mural-creme"
-          />
-        </a>
+        <>
+          <button
+            type="button"
+            onClick={() => setShowImage(true)}
+            aria-label="Abrir imagem do recado"
+            className="inline-block mb-4 cursor-zoom-in"
+          >
+            <Image
+              src={postImageUrl(post.image_path)}
+              alt="Imagem do recado"
+              width={1200}
+              height={900}
+              sizes="(max-width: 768px) 100vw, 28rem"
+              className="h-auto w-auto max-w-full max-h-112 object-contain rounded-lg border border-mural-line bg-mural-creme"
+            />
+          </button>
+          {showImage && (
+            <ImageLightbox
+              src={postImageUrl(post.image_path)}
+              alt="Imagem do recado"
+              onClose={() => setShowImage(false)}
+            />
+          )}
+        </>
       )}
 
       <PostInteractions

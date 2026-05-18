@@ -12,7 +12,13 @@ import {
 
 const EMPTY: SearchResults = { profiles: [], posts: [] };
 
-export default function SearchBar() {
+export default function SearchBar({
+  onNavigate,
+}: {
+  // Chamado quando o morador clica num resultado — usado no menu mobile
+  // pra fechar o drawer junto com o dropdown.
+  onNavigate?: () => void;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>(EMPTY);
   const [open, setOpen] = useState(false);
@@ -84,7 +90,13 @@ export default function SearchBar() {
               <ul>
                 {results.profiles.map((p) => (
                   <li key={p.nickname}>
-                    <ProfileRow profile={p} onClick={() => setOpen(false)} />
+                    <ProfileRow
+                      profile={p}
+                      onClick={() => {
+                        setOpen(false);
+                        onNavigate?.();
+                      }}
+                    />
                   </li>
                 ))}
               </ul>
@@ -99,7 +111,13 @@ export default function SearchBar() {
               <ul>
                 {results.posts.map((post) => (
                   <li key={post.id}>
-                    <PostRow post={post} onClick={() => setOpen(false)} />
+                    <PostRow
+                      post={post}
+                      onClick={() => {
+                        setOpen(false);
+                        onNavigate?.();
+                      }}
+                    />
                   </li>
                 ))}
               </ul>

@@ -5,13 +5,9 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   : "";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    // Upload de imagem (até 5 MB) sobe via Server Action; o padrão de 1 MB
-    // barraria o request antes de chegar na validação do createPost.
-    serverActions: {
-      bodySizeLimit: "6mb",
-    },
-  },
+  // Upload de imagem agora vai direto do navegador pro Supabase Storage
+  // (ver utils/upload.client.ts); a Server Action recebe só o caminho, então
+  // o limite padrão de body já basta — sem override de bodySizeLimit.
   images: {
     remotePatterns: [
       {

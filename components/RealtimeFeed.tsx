@@ -27,7 +27,7 @@ export default function RealtimeFeed({
   viewerRole?: Role | null;
   followingIds: string[] | null;
 }) {
-  const { category, feed } = useFeedFilter();
+  const { category, feed, isPending } = useFeedFilter();
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(
     initialPosts.length === FEED_PAGE_SIZE,
@@ -300,7 +300,11 @@ export default function RealtimeFeed({
         : "Nenhum recado por aqui ainda... Seja o primeiro!";
 
   return (
-    <div className="space-y-4">
+    <div
+      className={`space-y-4 transition-opacity duration-200 ${
+        isPending ? "opacity-40" : "opacity-100"
+      }`}
+    >
       {visiblePosts.map((post) => (
         <PostCard
           key={post.id}

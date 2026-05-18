@@ -11,9 +11,7 @@ import { FEED_PAGE_SIZE, EDIT_WINDOW_MS } from "@/utils/feed";
 import {
   POST_IMAGES_BUCKET,
   AVATARS_BUCKET,
-  MAX_POST_IMAGE_BYTES,
-  ALLOWED_POST_IMAGE_TYPES,
-  postImageExtension,
+  isOwnedImagePath,
 } from "@/utils/storage";
 import { isReactionEmoji, type ReactionEmoji } from "@/utils/reactions";
 import { asRole, canModerate, isAdmin } from "@/utils/roles";
@@ -190,13 +188,20 @@ export async function createPost(formData: FormData) {
   const categoryRaw = formData.get("category");
   const category = isPostCategory(categoryRaw) ? categoryRaw : DEFAULT_CATEGORY;
 
-  const imageFile = formData.get("image");
-  const hasImage = imageFile instanceof File && imageFile.size > 0;
+  // A imagem já subiu pro Storage no navegador (ver utils/upload.client.ts);
+  // aqui chega só o caminho. Validamos que ele pertence à pasta do próprio
+  // usuário — a RLS do bucket é a barreira definitiva.
+  const imagePathRaw = formData.get("image_path");
+  const image_path = isOwnedImagePath(imagePathRaw, user.id)
+    ? imagePathRaw
+    : null;
+  if (imagePathRaw && !image_path) {
+    return { error: "Imagem inválida. Tente enviar novamente." };
+  }
 
-  if (!content && !hasImage)
+  if (!content && !image_path)
     return { error: "Escreva um recado ou anexe uma imagem." };
 
-  // Rate limit antes do upload da imagem (falha rápido, não sobe à toa).
   const postRate = await checkRateLimit(
     supabase,
     "posts",
@@ -207,35 +212,6 @@ export async function createPost(formData: FormData) {
     return {
       error: rateLimitMessage(RATE_LIMIT.post.label, postRate.retryAfterSec),
     };
-  }
-
-  let image_path: string | null = null;
-
-  if (hasImage) {
-    const file = imageFile as File;
-
-    if (
-      !(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)
-    ) {
-      return { error: "Formato inválido. Use JPG, PNG, WebP ou GIF." };
-    }
-    if (file.size > MAX_POST_IMAGE_BYTES) {
-      return { error: "Imagem muito grande. O limite é 5 MB." };
-    }
-
-    const ext = postImageExtension(file.type)!;
-    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(POST_IMAGES_BUCKET)
-      .upload(path, file, { contentType: file.type });
-
-    if (uploadError) {
-      console.error("Erro ao subir imagem:", uploadError);
-      return { error: "Não foi possível enviar a imagem." };
-    }
-
-    image_path = path;
   }
 
   const { error } = await supabase.from("posts").insert([
@@ -250,10 +226,6 @@ export async function createPost(formData: FormData) {
 
   if (error) {
     console.error("Erro ao postar:", error);
-    // Não deixa arquivo órfão se o insert falhou após o upload
-    if (image_path) {
-      await supabase.storage.from(POST_IMAGES_BUCKET).remove([image_path]);
-    }
     return { error: "Não foi possível publicar o recado." };
   }
 
@@ -793,34 +765,19 @@ export async function updateProfile(formData: FormData) {
   const oldAvatarPath: string | null = current?.avatar_path ?? null;
 
   const removeAvatar = formData.get("remove_avatar") === "1";
-  const avatarFile = formData.get("avatar");
-  const hasNewAvatar = avatarFile instanceof File && avatarFile.size > 0;
+  // A foto já subiu pro Storage no navegador; aqui chega só o caminho.
+  const newAvatarPathRaw = formData.get("avatar_path");
+  const newAvatarPath = isOwnedImagePath(newAvatarPathRaw, user.id)
+    ? newAvatarPathRaw
+    : null;
+  if (newAvatarPathRaw && !newAvatarPath) {
+    return { error: "Imagem inválida. Tente enviar novamente." };
+  }
 
   // undefined = não mexe no avatar_path; null = remover; string = nova foto
   let avatar_path: string | null | undefined = undefined;
-  let uploadedPath: string | null = null;
-
-  if (hasNewAvatar) {
-    const file = avatarFile as File;
-    if (
-      !(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)
-    ) {
-      return { error: "Formato inválido. Use JPG, PNG, WebP ou GIF." };
-    }
-    if (file.size > MAX_POST_IMAGE_BYTES) {
-      return { error: "Imagem muito grande. O limite é 5 MB." };
-    }
-    const ext = postImageExtension(file.type)!;
-    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from(AVATARS_BUCKET)
-      .upload(path, file, { contentType: file.type });
-    if (uploadError) {
-      console.error("Erro ao subir avatar:", uploadError);
-      return { error: "Não foi possível enviar a foto." };
-    }
-    uploadedPath = path;
-    avatar_path = path;
+  if (newAvatarPath) {
+    avatar_path = newAvatarPath;
   } else if (removeAvatar) {
     avatar_path = null;
   }
@@ -839,10 +796,6 @@ export async function updateProfile(formData: FormData) {
     .eq("id", user.id);
 
   if (error) {
-    // Não deixa arquivo órfão se o update falhou após o upload
-    if (uploadedPath) {
-      await supabase.storage.from(AVATARS_BUCKET).remove([uploadedPath]);
-    }
     if (error.message.includes("unique constraint")) {
       return { error: "Este apelido já está em uso." };
     }
