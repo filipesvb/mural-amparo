@@ -79,3 +79,24 @@ export type Notification = {
 export type NotificationWithActor = Notification & {
   actor: Pick<Profile, "nickname" | "avatar_seed" | "avatar_path"> | null;
 };
+
+// Agenda da cidade. 'pendente' = sugerido por morador, aguardando staff;
+// 'aprovado' = público; 'recusado' = barrado (só o autor/staff enxerga).
+export type EventStatus = "pendente" | "aprovado" | "recusado";
+
+export type CityEvent = {
+  id: number;
+  title: string;
+  description: string | null;
+  starts_at: string;
+  location: string;
+  status: EventStatus;
+  created_by: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+};
+
+export type CityEventWithAuthor = CityEvent & {
+  suggester: Pick<Profile, "nickname" | "avatar_seed" | "avatar_path"> | null;
+};

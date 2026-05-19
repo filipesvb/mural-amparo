@@ -43,6 +43,14 @@ export default function SidebarNav({
         Seguindo
       </button>
       <Link
+        href="/eventos"
+        className={`${baseClass} ${idleClass}`}
+        onClick={onSelect}
+      >
+        <span>📅</span>
+        Agenda da cidade
+      </Link>
+      <Link
         href="/perfil"
         className={`${baseClass} ${idleClass}`}
         onClick={onSelect}

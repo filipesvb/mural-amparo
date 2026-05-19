@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { z } from "zod";
-import { credentialsSchema, nicknameSchema } from "@/utils/validation";
+import {
+  credentialsSchema,
+  nicknameSchema,
+  eventSchema,
+} from "@/utils/validation";
 import type { PostWithRelations } from "@/utils/types";
 import { FEED_PAGE_SIZE, EDIT_WINDOW_MS } from "@/utils/feed";
 import {
@@ -27,6 +31,7 @@ import {
   type PostCategory,
 } from "@/utils/categories";
 import { fetchFollowingIds } from "@/utils/follows.server";
+import { APP_UTC_OFFSET } from "@/utils/events";
 
 export type SearchProfileHit = {
   nickname: string;
@@ -150,15 +155,16 @@ export async function loadMorePosts(
 // estado em memória): conta quantas linhas o usuário criou na janela.
 async function checkRateLimit(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  table: "posts" | "comments",
+  table: "posts" | "comments" | "events",
   userId: string,
   cfg: { max: number; windowMs: number },
+  ownerColumn: string = "user_id",
 ): Promise<{ limited: boolean; retryAfterSec: number }> {
   const cutoff = new Date(Date.now() - cfg.windowMs).toISOString();
   const { data } = await supabase
     .from(table)
     .select("created_at")
-    .eq("user_id", userId)
+    .eq(ownerColumn, userId)
     .gte("created_at", cutoff)
     .order("created_at", { ascending: true })
     .limit(cfg.max + 5);
@@ -862,5 +868,160 @@ export async function setUserRole(formData: FormData) {
   }
 
   revalidatePath("/admin");
+  revalidatePath("/");
+}
+
+// Morador logado sugere um evento. Entra como 'pendente' — só vira público
+// depois que a staff aprova em /eventos. Mesmo esqueleto de createPost
+// (honeypot -> auth -> validação -> rate limit -> insert -> revalidate).
+export async function suggestEvent(formData: FormData) {
+  if (isHoneypotTripped(formData)) return;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Você precisa estar logado para sugerir um evento." };
+  }
+
+  const parsed = eventSchema.safeParse({
+    title: formData.get("title"),
+    description: formData.get("description"),
+    location: formData.get("location"),
+    date: formData.get("date"),
+    time: formData.get("time"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const { title, description, location, date, time } = parsed.data;
+
+  // Hora informada é horário de Amparo; carimbamos o offset fixo pra gravar
+  // o instante UTC correto.
+  const startsAt = new Date(`${date}T${time}:00${APP_UTC_OFFSET}`);
+  if (Number.isNaN(startsAt.getTime())) {
+    return { error: "Data ou horário inválidos." };
+  }
+  if (startsAt.getTime() < Date.now()) {
+    return { error: "O evento precisa ser numa data futura." };
+  }
+
+  const rate = await checkRateLimit(
+    supabase,
+    "events",
+    user.id,
+    RATE_LIMIT.event,
+    "created_by",
+  );
+  if (rate.limited) {
+    return {
+      error: rateLimitMessage(RATE_LIMIT.event.label, rate.retryAfterSec),
+    };
+  }
+
+  const { error } = await supabase.from("events").insert([
+    {
+      title,
+      description: description ? description : null,
+      location,
+      starts_at: startsAt.toISOString(),
+      created_by: user.id,
+      status: "pendente",
+    },
+  ]);
+  if (error) {
+    console.error("Erro ao sugerir evento:", error);
+    return { error: "Não foi possível enviar o evento. Tente de novo." };
+  }
+
+  revalidatePath("/eventos");
+  revalidatePath("/");
+}
+
+// Staff (moderador/admin) aprova ou recusa uma sugestão. Enforcement duplo:
+// aqui na action e na policy "staff revisa evento" (RLS).
+export async function reviewEvent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (!canModerate(asRole(me?.role))) {
+    return { error: "Apenas a equipe pode revisar eventos." };
+  }
+
+  const eventId = Number(formData.get("event_id"));
+  if (!Number.isInteger(eventId)) return { error: "Evento inválido." };
+
+  const decision = formData.get("decision");
+  const status =
+    decision === "aprovar"
+      ? "aprovado"
+      : decision === "recusar"
+        ? "recusado"
+        : null;
+  if (!status) return { error: "Ação inválida." };
+
+  const { error } = await supabase
+    .from("events")
+    .update({
+      status,
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", eventId);
+  if (error) {
+    console.error("Erro ao revisar evento:", error);
+    return { error: "Não foi possível revisar o evento." };
+  }
+
+  revalidatePath("/eventos");
+  revalidatePath("/");
+}
+
+// O autor apaga a própria sugestão; staff apaga qualquer evento. A RLS
+// (policies de delete) é a barreira definitiva — aqui só damos a mensagem.
+export async function deleteEvent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Você precisa estar logado." };
+
+  const eventId = Number(formData.get("event_id"));
+  if (!Number.isInteger(eventId)) return { error: "Evento inválido." };
+
+  const { data: ev } = await supabase
+    .from("events")
+    .select("created_by")
+    .eq("id", eventId)
+    .single();
+  if (!ev) return { error: "Evento não encontrado." };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  const canDelete =
+    ev.created_by === user.id || canModerate(asRole(me?.role));
+  if (!canDelete) {
+    return { error: "Você não pode apagar este evento." };
+  }
+
+  const { error } = await supabase.from("events").delete().eq("id", eventId);
+  if (error) {
+    console.error("Erro ao apagar evento:", error);
+    return { error: "Não foi possível apagar o evento." };
+  }
+
+  revalidatePath("/eventos");
   revalidatePath("/");
 }

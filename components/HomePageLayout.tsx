@@ -15,31 +15,16 @@ import FeedHeader from "@/components/FeedHeader";
 import SidebarNav from "@/components/SidebarNav";
 import RealtimeFeed from "@/components/RealtimeFeed";
 import MobileMenuButton from "@/components/MobileMenuButton";
-import type { PostWithRelations, NotificationWithActor, Profile } from "@/utils/types";
+import type {
+  PostWithRelations,
+  NotificationWithActor,
+  Profile,
+  CityEvent,
+} from "@/utils/types";
 import type { Role } from "@/utils/roles";
 import type { PostCategory } from "@/utils/categories";
 import { isAdmin } from "@/utils/roles";
-
-const UPCOMING_EVENTS = [
-  {
-    day: "23",
-    month: "MAI",
-    title: "Feirão da Praça",
-    place: "Praça Pádua Sales · 8h",
-  },
-  {
-    day: "07",
-    month: "JUN",
-    title: "Festival de Inverno",
-    place: "Centro Histórico · 18h",
-  },
-  {
-    day: "15",
-    month: "JUN",
-    title: "Mutirão da Limpeza",
-    place: "Rio Camanducaia · 7h",
-  },
-];
+import { eventDayBadge } from "@/utils/events";
 
 interface HomePageLayoutProps {
   user: User | null;
@@ -54,6 +39,7 @@ interface HomePageLayoutProps {
   trending: Array<{ tag: string }>;
   viewerRole?: Role | null;
   followingIds: string[] | null;
+  events: CityEvent[];
   error: Error | null;
 }
 
@@ -70,6 +56,7 @@ export default function HomePageLayout({
   trending,
   viewerRole,
   followingIds,
+  events,
   error,
 }: HomePageLayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -279,31 +266,55 @@ export default function HomePageLayout({
               </div>
 
               <div className="soft-card p-4">
-                <h3 className="font-bold text-mural-ink mb-3">
-                  Próximos eventos
-                </h3>
-                <ul className="space-y-3">
-                  {UPCOMING_EVENTS.map((e) => (
-                    <li key={e.title} className="flex items-center gap-3">
-                      <div className="bg-mural-creme border border-mural-line rounded-lg w-11 text-center py-1 shrink-0">
-                        <div className="text-base font-extrabold text-mural-ink leading-none">
-                          {e.day}
-                        </div>
-                        <div className="text-[9px] font-bold uppercase text-mural-ink/50">
-                          {e.month}
-                        </div>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-mural-ink truncate">
-                          {e.title}
-                        </p>
-                        <p className="text-[11px] text-mural-ink/50 truncate">
-                          {e.place}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-mural-ink">
+                    Próximos eventos
+                  </h3>
+                  <Link
+                    href="/eventos"
+                    className="text-[11px] font-bold text-mural-brown hover:underline"
+                  >
+                    Ver agenda →
+                  </Link>
+                </div>
+                {events.length === 0 ? (
+                  <p className="text-xs italic text-mural-ink/40">
+                    Nada marcado ainda.{" "}
+                    <Link href="/eventos" className="underline">
+                      Sugira um evento
+                    </Link>
+                    .
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {events.map((ev) => {
+                      const { day, month } = eventDayBadge(ev.starts_at);
+                      return (
+                        <li
+                          key={ev.id}
+                          className="flex items-center gap-3"
+                        >
+                          <div className="bg-mural-creme border border-mural-line rounded-lg w-11 text-center py-1 shrink-0">
+                            <div className="text-base font-extrabold text-mural-ink leading-none">
+                              {day}
+                            </div>
+                            <div className="text-[9px] font-bold uppercase text-mural-ink/50">
+                              {month}
+                            </div>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-mural-ink truncate">
+                              {ev.title}
+                            </p>
+                            <p className="text-[11px] text-mural-ink/50 truncate">
+                              {ev.location}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
 
               <div className="soft-card p-4">

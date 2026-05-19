@@ -10,6 +10,9 @@ export const HONEYPOT_FIELD = "website";
 export const RATE_LIMIT = {
   post: { max: 5, windowMs: 5 * 60 * 1000, label: "recados" },
   comment: { max: 10, windowMs: 5 * 60 * 1000, label: "comentários" },
+  // Evento passa por curadoria, então o flood incomoda menos — mesmo assim
+  // limita pra não entupir a fila de aprovação.
+  event: { max: 4, windowMs: 30 * 60 * 1000, label: "sugestões de evento" },
 } as const;
 
 export type RateLimitKind = keyof typeof RATE_LIMIT;

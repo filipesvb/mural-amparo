@@ -7,9 +7,10 @@ import { fetchInitialNotifications } from "@/utils/notifications";
 import { collectMentionsFromPosts } from "@/utils/mentions";
 import { fetchValidMentions } from "@/utils/mentions.server";
 import HomePageLayout from "@/components/HomePageLayout";
-import type { PostWithRelations } from "@/utils/types";
+import type { PostWithRelations, CityEvent } from "@/utils/types";
 import { isPostCategory, type PostCategory } from "@/utils/categories";
 import { asRole } from "@/utils/roles";
+import { startOfTodayISO, SIDEBAR_EVENTS_LIMIT } from "@/utils/events";
 import type { ScopeCounts } from "@/components/CategoryChips";
 
 
@@ -98,6 +99,17 @@ export default async function Home({
   );
   const trending = await fetchTrendingHashtags(6);
 
+  // Resumo da agenda na sidebar: próximos aprovados (RLS já esconde os
+  // pendentes/recusados de quem não é o autor/staff).
+  const { data: eventsData } = await supabase
+    .from("events")
+    .select("*")
+    .eq("status", "aprovado")
+    .gte("starts_at", startOfTodayISO())
+    .order("starts_at", { ascending: true })
+    .limit(SIDEBAR_EVENTS_LIMIT);
+  const events = (eventsData ?? []) as CityEvent[];
+
   return (
     <HomePageLayout
       user={user}
@@ -112,6 +124,7 @@ export default async function Home({
       trending={trending}
       viewerRole={asRole(profile?.role)}
       followingIds={followingIds}
+      events={events}
       error={error}
     />
   );
