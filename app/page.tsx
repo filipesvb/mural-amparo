@@ -11,6 +11,7 @@ import type { PostWithRelations, CityEvent } from "@/utils/types";
 import { isPostCategory, type PostCategory } from "@/utils/categories";
 import { asRole } from "@/utils/roles";
 import { startOfTodayISO, SIDEBAR_EVENTS_LIMIT } from "@/utils/events";
+import { getCurrentWeather } from "@/utils/weather";
 import type { ScopeCounts } from "@/components/CategoryChips";
 
 
@@ -110,6 +111,8 @@ export default async function Home({
     .limit(SIDEBAR_EVENTS_LIMIT);
   const events = (eventsData ?? []) as CityEvent[];
 
+  const weather = await getCurrentWeather();
+
   return (
     <HomePageLayout
       user={user}
@@ -125,6 +128,7 @@ export default async function Home({
       viewerRole={asRole(profile?.role)}
       followingIds={followingIds}
       events={events}
+      weather={weather}
       error={error}
     />
   );

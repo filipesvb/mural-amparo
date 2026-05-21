@@ -25,6 +25,7 @@ import type { Role } from "@/utils/roles";
 import type { PostCategory } from "@/utils/categories";
 import { isAdmin } from "@/utils/roles";
 import { eventDayBadge } from "@/utils/events";
+import type { CurrentWeather } from "@/utils/weather";
 
 interface HomePageLayoutProps {
   user: User | null;
@@ -40,6 +41,7 @@ interface HomePageLayoutProps {
   viewerRole?: Role | null;
   followingIds: string[] | null;
   events: CityEvent[];
+  weather: CurrentWeather | null;
   error: Error | null;
 }
 
@@ -57,6 +59,7 @@ export default function HomePageLayout({
   viewerRole,
   followingIds,
   events,
+  weather,
   error,
 }: HomePageLayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -319,15 +322,21 @@ export default function HomePageLayout({
 
               <div className="soft-card p-4">
                 <h3 className="font-bold text-mural-ink mb-2">Tempo agora</h3>
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl font-extrabold text-mural-brown">
-                    21°
-                  </span>
-                  <div className="text-[11px] text-mural-ink/60">
-                    <p>Parcialmente nublado</p>
-                    <p>mín 17° · máx 24°</p>
+                {weather ? (
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl font-extrabold text-mural-brown">
+                      {weather.temperature}°
+                    </span>
+                    <div className="text-[11px] text-mural-ink/60">
+                      <p>{weather.description}</p>
+                      <p>mín {weather.min}° · máx {weather.max}°</p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <p className="text-[11px] text-mural-ink/60">
+                    Previsão indisponível no momento.
+                  </p>
+                )}
               </div>
             </aside>
           </div>
