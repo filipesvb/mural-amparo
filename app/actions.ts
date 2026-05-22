@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -832,6 +833,93 @@ export async function updateProfile(formData: FormData) {
 
   revalidatePath("/");
   redirect(`/perfil/${encodeURIComponent(nickname)}`);
+}
+
+// Exclusão definitiva da conta (direito LGPD ao esquecimento). Re-autentica
+// pela senha pra blindar de cliques acidentais e session-hijack, depois usa
+// a service role pra apagar o usuário em auth.users — o cascade nas FKs cuida
+// das tabelas (posts, comments, reactions, bookmarks, follows, etc.). Files
+// do Storage não cascateiam, então listamos e removemos antes.
+export async function deleteAccount(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.email) return { error: "Não autorizado" };
+
+  const password = (formData.get("password") as string) ?? "";
+  if (!password) {
+    return { error: "Informe sua senha pra confirmar." };
+  }
+  const confirmation = ((formData.get("confirmation") as string) ?? "").trim();
+  if (confirmation !== "EXCLUIR") {
+    return { error: 'Digite "EXCLUIR" em maiúsculas pra confirmar.' };
+  }
+
+  // Re-autenticação: tentar logar com a senha enviada confirma intenção
+  // mesmo numa sessão já aberta.
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password,
+  });
+  if (reauthError) {
+    return { error: "Senha incorreta." };
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    console.error("deleteAccount: SUPABASE_SERVICE_ROLE_KEY ausente.");
+    return { error: "Configuração ausente. Tente novamente em instantes." };
+  }
+  const admin = createServiceRoleClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  // Storage cleanup — best-effort. Falhas aqui não bloqueiam a exclusão da
+  // conta (o usuário tem direito a sair); arquivos órfãos ficam pra rotina
+  // de manutenção. Service role enxerga o bucket inteiro.
+  try {
+    const { data: ownPosts } = await admin
+      .from("posts")
+      .select("image_paths")
+      .eq("user_id", user.id);
+    const postImagePaths: string[] = [];
+    for (const row of ownPosts ?? []) {
+      const paths = (row as { image_paths: string[] | null }).image_paths;
+      if (Array.isArray(paths)) postImagePaths.push(...paths);
+    }
+    if (postImagePaths.length > 0) {
+      await admin.storage.from(POST_IMAGES_BUCKET).remove(postImagePaths);
+    }
+
+    const { data: profileRow } = await admin
+      .from("profiles")
+      .select("avatar_path")
+      .eq("id", user.id)
+      .single();
+    const avatarPath = (profileRow as { avatar_path: string | null } | null)
+      ?.avatar_path;
+    if (avatarPath) {
+      await admin.storage.from(AVATARS_BUCKET).remove([avatarPath]);
+    }
+  } catch (err) {
+    console.error("deleteAccount: falha ao limpar Storage:", err);
+  }
+
+  // Exclusão definitiva — cascade nas FKs (auth.users → profiles → posts/etc.)
+  // remove tudo associado em uma transação.
+  const { error: delError } = await admin.auth.admin.deleteUser(user.id);
+  if (delError) {
+    console.error("deleteAccount: admin.deleteUser falhou:", delError);
+    return { error: "Não foi possível excluir agora. Tente novamente." };
+  }
+
+  // signOut local pra invalidar cookies antes do redirect.
+  await supabase.auth.signOut();
+
+  revalidatePath("/");
+  redirect("/login?info=conta-excluida");
 }
 
 // Conclusão do fluxo de boas-vindas (/bem-vindo). Difere do updateProfile

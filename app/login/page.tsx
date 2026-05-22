@@ -14,13 +14,20 @@ export default function LoginPage() {
   );
 }
 
+const INFO_MESSAGES: Record<string, string> = {
+  "conta-excluida":
+    "Sua conta e todos os dados associados foram excluídos. Esperamos te ver de novo em Amparo.",
+};
+
 function LoginForm() {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(
     searchParams.get("error") ?? "",
   );
-  const [infoMessage, setInfoMessage] = useState("");
+  const [infoMessage, setInfoMessage] = useState(
+    INFO_MESSAGES[searchParams.get("info") ?? ""] ?? "",
+  );
 
   async function handleAction(formData: FormData) {
     setIsLoading(true);
@@ -103,6 +110,24 @@ function LoginForm() {
               >
                 Esqueci minha senha
               </Link>
+            </p>
+
+            <p className="text-center text-[11px] italic text-mural-dark/60 pt-2 border-t border-mural-dark/10">
+              Ao se cadastrar, você concorda com os{" "}
+              <Link
+                href="/termos"
+                className="underline text-mural-brown font-bold"
+              >
+                Termos de Uso
+              </Link>{" "}
+              e a{" "}
+              <Link
+                href="/privacidade"
+                className="underline text-mural-brown font-bold"
+              >
+                Política de Privacidade
+              </Link>
+              .
             </p>
           </form>
         </div>

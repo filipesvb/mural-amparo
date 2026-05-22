@@ -37,7 +37,7 @@ export default async function BemVindoPage() {
   const suggestedNickname = suggestNicknameFromEmail(user.email);
 
   return (
-    <main className="min-h-screen p-4 md:p-8 flex justify-center items-center bg-mural-creme">
+    <main className="min-h-screen p-4 md:p-8 flex justify-center items-start bg-mural-creme">
       <div className="w-full max-w-md bg-white retro-border shadow-lg overflow-hidden flex flex-col">
         <header className="wood-header-footer p-4 border-b-2 border-mural-dark text-mural-creme">
           <h1 className="mural-title text-xl">Bem-vindo ao Mural Amparo 🌳</h1>

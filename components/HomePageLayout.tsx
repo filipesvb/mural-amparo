@@ -345,7 +345,16 @@ export default function HomePageLayout({
         {/* Footer */}
         <footer className="wood-header-footer shrink-0 p-6 text-center text-mural-creme">
           <p className="mural-title text-lg mb-1">Mural Amparo</p>
-          <p className="text-[10px] opacity-70">© 2026 · Conectando Amparo</p>
+          <p className="text-[10px] opacity-70 mb-2">© 2026 · Conectando Amparo</p>
+          <p className="text-[10px] opacity-60">
+            <Link href="/termos" className="underline hover:opacity-100">
+              Termos
+            </Link>
+            {" · "}
+            <Link href="/privacidade" className="underline hover:opacity-100">
+              Privacidade
+            </Link>
+          </p>
         </footer>
       </div>
     </main>

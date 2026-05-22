@@ -22,7 +22,7 @@ export default async function EditarPerfilPage() {
     : "/";
 
   return (
-    <main className="h-screen p-4 md:p-8 flex justify-center items-center bg-mural-creme">
+    <main className="min-h-screen p-4 md:p-8 flex justify-center items-start bg-mural-creme">
       <div className="w-full max-w-md bg-white retro-border shadow-lg overflow-hidden flex flex-col">
         <header className="wood-header-footer p-4 border-b-2 border-mural-dark flex justify-between items-center text-mural-creme">
           <h1 className="font-bold tracking-tight">👤 Seu Perfil em Amparo</h1>
@@ -40,6 +40,32 @@ export default async function EditarPerfilPage() {
           </div>
 
           <ProfileForm profile={profile} />
+
+          <div className="pt-4 border-t-2 border-mural-dark/20 space-y-3">
+            <h2 className="text-xs font-bold uppercase text-mural-dark/70">
+              Privacidade & conta
+            </h2>
+            <a
+              href="/api/exportar-dados"
+              className="block w-full bg-mural-creme text-mural-dark p-2 text-center text-xs font-bold retro-border retro-button-active"
+              download
+            >
+              📥 Exportar meus dados (JSON)
+            </a>
+            <Link
+              href="/perfil/excluir"
+              className="block w-full bg-red-50 text-red-900 p-2 text-center text-xs font-bold border-2 border-red-800 retro-button-active hover:bg-red-100"
+            >
+              🗑️ Excluir minha conta
+            </Link>
+            <p className="text-[10px] text-mural-dark/60 italic text-center">
+              Veja a{" "}
+              <Link href="/privacidade" className="underline">
+                Política de Privacidade
+              </Link>{" "}
+              pra detalhes.
+            </p>
+          </div>
         </div>
 
         <footer className="bg-mural-panel p-4 border-t-2 border-mural-dark text-center">
