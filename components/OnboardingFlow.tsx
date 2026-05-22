@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
-import { updateProfile } from "@/app/actions";
+import { completeOnboarding } from "@/app/actions";
 import Avatar from "./Avatar";
 import {
   ALLOWED_POST_IMAGE_TYPES,
@@ -10,24 +10,25 @@ import {
   AVATARS_BUCKET,
 } from "@/utils/storage";
 import { uploadImage, removeImage } from "@/utils/upload.client";
-import type { Profile } from "@/utils/types";
+
+interface OnboardingFlowProps {
+  userId: string;
+  suggestedNickname: string;
+}
 
 const BIO_MAX = 280;
 
-export default function ProfileForm({ profile }: { profile: Profile | null }) {
-  const [nickname, setNickname] = useState(profile?.nickname || "");
-  const [seed, setSeed] = useState(profile?.avatar_seed || "");
-  const [bio, setBio] = useState(profile?.bio || "");
+export default function OnboardingFlow({
+  userId,
+  suggestedNickname,
+}: OnboardingFlowProps) {
+  const [nickname, setNickname] = useState(suggestedNickname);
+  const [bio, setBio] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [removeAvatar, setRemoveAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
-
-  // Tem foto enviada e o usuário não pediu pra remover nem escolheu outra
-  const showsCurrentPhoto =
-    !!profile?.avatar_path && !removeAvatar && !previewUrl;
 
   function clearFile() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -56,12 +57,6 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
-    setRemoveAvatar(false);
-  }
-
-  function handleRemovePhoto() {
-    clearFile();
-    setRemoveAvatar(true);
   }
 
   async function handleSubmit(formData: FormData) {
@@ -69,18 +64,8 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
     startTransition(async () => {
       let uploadedPath: string | null = null;
       try {
-        // Sobe a foto direto do navegador; a Server Action recebe só o
-        // caminho (a Vercel barra arquivos grandes no payload da action).
         if (selectedFile) {
-          if (!profile?.id) {
-            setError("Recarregue a página e tente novamente.");
-            return;
-          }
-          const up = await uploadImage(
-            AVATARS_BUCKET,
-            profile.id,
-            selectedFile,
-          );
+          const up = await uploadImage(AVATARS_BUCKET, userId, selectedFile);
           if ("error" in up) {
             setError(up.error);
             return;
@@ -88,7 +73,7 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
           uploadedPath = up.path;
           formData.set("avatar_path", up.path);
         }
-        const result = await updateProfile(formData);
+        const result = await completeOnboarding(formData);
         if (result?.error) {
           if (uploadedPath) await removeImage(AVATARS_BUCKET, uploadedPath);
           setError(result.error);
@@ -100,9 +85,11 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
     });
   }
 
+  const bioRemaining = BIO_MAX - bio.length;
+
   return (
-    <form action={handleSubmit} className="space-y-4">
-      {/* Preview do avatar: foto escolhida > foto atual > avatar gerado */}
+    <form action={handleSubmit} className="space-y-5">
+      {/* Pré-visualização do avatar */}
       <div className="flex flex-col items-center justify-center p-4 bg-white retro-border border-dashed">
         <div className="w-24 h-24 bg-mural-brown retro-border overflow-hidden mb-2">
           {previewUrl ? (
@@ -114,65 +101,29 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
               unoptimized
               className="h-full w-full object-cover"
             />
-          ) : showsCurrentPhoto ? (
-            <Avatar
-              avatarPath={profile?.avatar_path}
-              size={96}
-              alt="Sua foto de perfil"
-            />
           ) : (
-            <Avatar seed={seed} name={nickname} size={96} alt="Avatar gerado" />
+            <Avatar
+              seed={nickname || "morador"}
+              name={nickname}
+              size={96}
+              alt="Avatar"
+            />
           )}
         </div>
         <p className="text-[10px] font-bold text-mural-brown uppercase">
-          {previewUrl || showsCurrentPhoto
-            ? "Foto de perfil"
-            : "Avatar gerado (sem foto)"}
+          {previewUrl ? "Sua foto" : "Avatar gerado a partir do apelido"}
         </p>
       </div>
 
       {error && (
-        <div className="p-2 bg-red-100 border-2 border-red-800 text-red-800 text-xs font-bold">
+        <div className="bg-red-100 border-2 border-red-800 p-3 text-red-800 text-sm retro-border font-bold">
           ⚠️ {error}
         </div>
       )}
 
       <div>
         <label className="block text-xs font-bold mb-1 uppercase text-mural-dark">
-          Foto de perfil (opcional):
-        </label>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={handleFileChange}
-          className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:border-2 file:border-mural-dark file:bg-mural-creme file:text-mural-dark file:font-bold file:cursor-pointer"
-        />
-        {(previewUrl || showsCurrentPhoto) && (
-          <button
-            type="button"
-            onClick={handleRemovePhoto}
-            className="mt-2 text-[11px] font-bold text-red-700 underline"
-          >
-            🗑️ Remover foto (voltar ao avatar gerado)
-          </button>
-        )}
-        {removeAvatar && (
-          <>
-            <input type="hidden" name="remove_avatar" value="1" />
-            <p className="mt-1 text-[11px] italic text-mural-dark/70">
-              A foto será removida ao salvar.
-            </p>
-          </>
-        )}
-        <p className="mt-1 text-[10px] text-mural-dark/50">
-          JPG, PNG, WebP ou GIF · até 5 MB.
-        </p>
-      </div>
-
-      <div>
-        <label className="block text-xs font-bold mb-1 uppercase text-mural-dark">
-          Apelido (Nickname):
+          Apelido <span className="text-red-700">*</span>
         </label>
         <input
           name="nickname"
@@ -181,26 +132,16 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
           className="w-full p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none text-sm font-bold"
           placeholder="Ex: ZeDaPadaria"
           required
+          maxLength={30}
         />
+        <p className="mt-1 text-[10px] text-mural-dark/60">
+          É como os outros moradores vão te chamar. Letras, números e _ (2-30 caracteres).
+        </p>
       </div>
 
       <div>
         <label className="block text-xs font-bold mb-1 uppercase text-mural-dark">
-          Semente do Avatar (usada quando não há foto):
-        </label>
-        <input
-          name="avatar_seed"
-          value={seed}
-          onChange={(e) => setSeed(e.target.value)}
-          className="w-full p-2 bg-mural-creme border-2 border-mural-dark focus:outline-none text-sm"
-          placeholder="Digite qualquer coisa..."
-          required
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-bold mb-1 uppercase text-mural-dark">
-          Bio <span className="text-mural-dark/50 normal-case">(opcional)</span>:
+          Bio <span className="text-mural-dark/50 normal-case">(opcional)</span>
         </label>
         <textarea
           name="bio"
@@ -212,7 +153,32 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
           maxLength={BIO_MAX}
         />
         <p className="mt-1 text-[10px] text-mural-dark/60 text-right">
-          {BIO_MAX - bio.length} caracteres restantes
+          {bioRemaining} caracteres restantes
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold mb-1 uppercase text-mural-dark">
+          Foto de perfil <span className="text-mural-dark/50 normal-case">(opcional)</span>
+        </label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          onChange={handleFileChange}
+          className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:border-2 file:border-mural-dark file:bg-mural-creme file:text-mural-dark file:font-bold file:cursor-pointer"
+        />
+        {previewUrl && (
+          <button
+            type="button"
+            onClick={clearFile}
+            className="mt-2 text-[11px] font-bold text-red-700 underline"
+          >
+            🗑️ Remover (voltar ao avatar gerado)
+          </button>
+        )}
+        <p className="mt-1 text-[10px] text-mural-dark/50">
+          JPG, PNG, WebP ou GIF · até 5 MB. Sem foto? Geramos um avatar a partir do seu apelido.
         </p>
       </div>
 
@@ -221,8 +187,12 @@ export default function ProfileForm({ profile }: { profile: Profile | null }) {
         disabled={isPending}
         className="w-full bg-mural-brown text-white p-3 font-bold retro-border retro-button-active disabled:opacity-50"
       >
-        {isPending ? "Salvando..." : "Atualizar Identidade 💾"}
+        {isPending ? "Entrando..." : "Entrar no Mural 🌳"}
       </button>
+
+      <p className="text-[11px] text-center text-mural-dark/60 italic">
+        Você pode mudar tudo isso depois em <strong>Editar perfil</strong>.
+      </p>
     </form>
   );
 }

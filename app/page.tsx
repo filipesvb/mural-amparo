@@ -90,6 +90,13 @@ export default async function Home({
     .eq("id", user?.id)
     .single();
 
+  // Primeira passada após o cadastro: morador ainda não escolheu apelido/foto.
+  // Mandamos pro /bem-vindo até completar (ou pular) o fluxo. Vide
+  // notas/creating_onboarding_schema.sql pro bootstrap dos veteranos.
+  if (user && profile && !profile.onboarded_at) {
+    redirect("/bem-vindo");
+  }
+
   const { notifications: initialNotifications, unreadCount } = user
     ? await fetchInitialNotifications(user.id)
     : { notifications: [], unreadCount: 0 };

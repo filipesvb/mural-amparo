@@ -4,6 +4,11 @@ export type Profile = {
   avatar_seed: string | null;
   // Caminho da foto enviada (bucket `avatars`); null = usa o avatar_seed
   avatar_path: string | null;
+  // Apresentação curta no perfil público (até 280 chars)
+  bio: string | null;
+  // Marca quando o morador completou (ou pulou) o fluxo de /bem-vindo.
+  // Null = vai cair no onboarding no próximo acesso à home.
+  onboarded_at: string | null;
   role: Role;
   updated_at?: string | null;
   created_at?: string | null;

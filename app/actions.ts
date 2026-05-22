@@ -747,6 +747,16 @@ export async function addComment(formData: FormData) {
   revalidatePath("/");
 }
 
+// Limite duro de bio (combina com o CHECK constraint em profiles).
+const BIO_MAX = 280;
+
+function parseBio(raw: FormDataEntryValue | null): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, BIO_MAX);
+}
+
 export async function updateProfile(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -756,6 +766,7 @@ export async function updateProfile(formData: FormData) {
 
   const rawNickname = (formData.get("nickname") as string).trim();
   const avatar_seed = (formData.get("avatar_seed") as string).trim();
+  const bio = parseBio(formData.get("bio"));
 
   const parsed = nicknameSchema.safeParse(rawNickname);
   if (!parsed.success) {
@@ -792,9 +803,10 @@ export async function updateProfile(formData: FormData) {
   const updatePayload: {
     nickname: string;
     avatar_seed: string;
+    bio: string | null;
     updated_at: string;
     avatar_path?: string | null;
-  } = { nickname, avatar_seed, updated_at: new Date().toISOString() };
+  } = { nickname, avatar_seed, bio, updated_at: new Date().toISOString() };
   if (avatar_path !== undefined) updatePayload.avatar_path = avatar_path;
 
   const { error } = await supabase
@@ -820,6 +832,67 @@ export async function updateProfile(formData: FormData) {
 
   revalidatePath("/");
   redirect(`/perfil/${encodeURIComponent(nickname)}`);
+}
+
+// Conclusão do fluxo de boas-vindas (/bem-vindo). Difere do updateProfile
+// em três pontos: (1) marca onboarded_at; (2) redireciona pra home em vez
+// do perfil; (3) usa o próprio nickname como avatar_seed default quando o
+// morador não escolheu nenhuma.
+export async function completeOnboarding(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado" };
+
+  const rawNickname = (formData.get("nickname") as string).trim();
+  const bio = parseBio(formData.get("bio"));
+
+  const parsed = nicknameSchema.safeParse(rawNickname);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const nickname = parsed.data;
+
+  // Foto: mesmo padrão do updateProfile — upload já aconteceu no cliente.
+  const newAvatarPathRaw = formData.get("avatar_path");
+  const newAvatarPath = isOwnedImagePath(newAvatarPathRaw, user.id)
+    ? newAvatarPathRaw
+    : null;
+  if (newAvatarPathRaw && !newAvatarPath) {
+    return { error: "Imagem inválida. Tente enviar novamente." };
+  }
+
+  const updatePayload: {
+    nickname: string;
+    avatar_seed: string;
+    bio: string | null;
+    onboarded_at: string;
+    updated_at: string;
+    avatar_path?: string;
+  } = {
+    nickname,
+    avatar_seed: nickname,
+    bio,
+    onboarded_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (newAvatarPath) updatePayload.avatar_path = newAvatarPath;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(updatePayload)
+    .eq("id", user.id);
+
+  if (error) {
+    if (error.message.includes("unique constraint")) {
+      return { error: "Este apelido já está em uso. Escolha outro." };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath("/");
+  redirect("/");
 }
 
 // Promove/rebaixa um morador. Só admin. Pela UI o papel só transita entre

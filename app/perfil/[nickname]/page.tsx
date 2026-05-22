@@ -180,6 +180,11 @@ export default async function PerfilPublicoPage({
                 🌳 Morador desde {memberSince}
               </p>
             )}
+            {profile.bio && (
+              <p className="text-sm text-mural-ink/80 whitespace-pre-wrap">
+                {profile.bio}
+              </p>
+            )}
             <div className="flex flex-wrap gap-2 justify-center md:justify-start text-sm font-bold mt-3">
               <span className="bg-mural-card border border-mural-line rounded-full px-3 py-1">
                 📝 {totalPosts}{" "}
