@@ -39,7 +39,7 @@ body {
   }
 
   .retro-button-active {
-    @apply transition-all active:translate-y-[1px];
+    @apply transition-all cursor-pointer hover:-translate-y-px hover:brightness-105 active:translate-y-[1px];
   }
 
   /* --- Design system suave --- */

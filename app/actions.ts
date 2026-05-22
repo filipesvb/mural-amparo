@@ -835,6 +835,102 @@ export async function updateProfile(formData: FormData) {
   redirect(`/perfil/${encodeURIComponent(nickname)}`);
 }
 
+// Troca de senha pra usuário JÁ logado (diferente do `updatePassword`, que
+// roda no fluxo de redefinição via link de e-mail). Exige a senha atual pra
+// blindar de session-hijack: se o invasor não souber a senha antiga, não
+// consegue trocar e travar o dono fora. Por segurança, ao trocar com sucesso
+// derruba as outras sessões — esta sessão continua válida no dispositivo
+// atual.
+export async function changeMyPassword(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.email) return { error: "Não autorizado" };
+
+  const currentPassword = (formData.get("current_password") as string) ?? "";
+  const newPasswordRaw = (formData.get("new_password") as string) ?? "";
+
+  const parsed = z
+    .string()
+    .min(6, "A nova senha deve ter ao menos 6 caracteres")
+    .safeParse(newPasswordRaw);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const newPassword = parsed.data;
+
+  if (newPassword === currentPassword) {
+    return { error: "A nova senha precisa ser diferente da atual." };
+  }
+
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+  if (reauthError) return { error: "Senha atual incorreta." };
+
+  const { error: updError } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+  if (updError) return { error: updError.message };
+
+  // Derruba outras sessões (outros dispositivos/abas). A sessão atual continua.
+  await supabase.auth.signOut({ scope: "others" });
+
+  return { info: "Senha atualizada. As outras sessões foram desconectadas." };
+}
+
+// Pedido de troca de e-mail. Supabase manda automaticamente um link de
+// confirmação pro novo endereço — o e-mail só muda depois que o morador
+// clicar nesse link (que cai em /auth/confirm via exchangeCodeForSession).
+// Exige a senha atual pra evitar troca em sessão sequestrada.
+export async function changeMyEmail(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.email) return { error: "Não autorizado" };
+
+  const newEmailParsed = z
+    .email("E-mail inválido")
+    .safeParse(formData.get("new_email"));
+  if (!newEmailParsed.success) {
+    return { error: newEmailParsed.error.issues[0].message };
+  }
+  const newEmail = newEmailParsed.data.toLowerCase();
+  if (newEmail === user.email.toLowerCase()) {
+    return { error: "Este já é o seu e-mail atual." };
+  }
+
+  const currentPassword = (formData.get("current_password") as string) ?? "";
+  if (!currentPassword) return { error: "Informe sua senha pra confirmar." };
+
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+  if (reauthError) return { error: "Senha incorreta." };
+
+  // Supabase dispara o e-mail de confirmação automaticamente. O link usa a
+  // Site URL configurada no painel, então cai em /auth/confirm.
+  const { error: updError } = await supabase.auth.updateUser({
+    email: newEmail,
+  });
+  if (updError) return { error: updError.message };
+
+  return {
+    info: `Enviamos um link de confirmação pra ${newEmail}. Clique nele pra finalizar a troca — até lá, seu e-mail continua sendo o atual.`,
+  };
+}
+
+// Desconecta o morador de TODAS as sessões (todos os dispositivos, inclusive
+// esta). Útil quando suspeita de acesso indevido. Redirect pro login com nota.
+export async function signOutEverywhere() {
+  const supabase = await createClient();
+  await supabase.auth.signOut({ scope: "global" });
+  revalidatePath("/");
+  redirect("/login?info=desconectado-tudo");
+}
+
 // Exclusão definitiva da conta (direito LGPD ao esquecimento). Re-autentica
 // pela senha pra blindar de cliques acidentais e session-hijack, depois usa
 // a service role pra apagar o usuário em auth.users — o cascade nas FKs cuida

@@ -67,6 +67,14 @@ export default function SidebarNav({
         Salvos
       </Link>
       <Link
+        href="/configuracoes"
+        className={`${baseClass} ${idleClass}`}
+        onClick={onSelect}
+      >
+        <span>⚙️</span>
+        Configurações
+      </Link>
+      <Link
         href="#"
         className={`${baseClass} ${idleClass}`}
         onClick={onSelect}

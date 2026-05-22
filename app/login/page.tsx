@@ -17,6 +17,8 @@ export default function LoginPage() {
 const INFO_MESSAGES: Record<string, string> = {
   "conta-excluida":
     "Sua conta e todos os dados associados foram excluídos. Esperamos te ver de novo em Amparo.",
+  "desconectado-tudo":
+    "Você foi desconectado de todos os dispositivos. Faça login novamente pra continuar.",
 };
 
 function LoginForm() {
@@ -46,9 +48,9 @@ function LoginForm() {
           <h1 className="font-bold tracking-tight">Acesso ao Mural</h1>
           <Link
             href="/"
-            className="text-xs retro-button-active bg-mural-dark px-2 border border-white"
+            className="text-xs bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
           >
-            [X] Fechar
+            ✕ Fechar
           </Link>
         </header>
 

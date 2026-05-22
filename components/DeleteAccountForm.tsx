@@ -82,7 +82,7 @@ export default function DeleteAccountForm() {
 
       <div className="flex gap-3 pt-2">
         <Link
-          href="/perfil/editar"
+          href="/configuracoes"
           className="flex-1 bg-mural-creme text-mural-dark p-3 font-bold text-center retro-border retro-button-active"
         >
           Cancelar

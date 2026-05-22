@@ -14,9 +14,9 @@ export default function PrivacidadePage() {
           <h1 className="mural-title text-xl">Política de Privacidade</h1>
           <Link
             href="/"
-            className="text-xs bg-mural-dark px-2 py-1 border border-white retro-button-active hover:text-white"
+            className="text-xs bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
           >
-            [←] Voltar
+            ← Mural
           </Link>
         </header>
 

@@ -26,9 +26,9 @@ export default function EsqueciSenhaPage() {
           <h1 className="font-bold tracking-tight">Esqueci minha senha</h1>
           <Link
             href="/login"
-            className="text-xs retro-button-active bg-mural-dark px-2 border border-white"
+            className="text-xs bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
           >
-            [←] Login
+            ← Login
           </Link>
         </header>
 

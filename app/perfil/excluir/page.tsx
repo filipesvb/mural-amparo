@@ -21,10 +21,10 @@ export default async function ExcluirContaPage() {
         <header className="wood-header-footer p-4 border-b-2 border-mural-dark flex justify-between items-center text-mural-creme">
           <h1 className="font-bold tracking-tight">🗑️ Excluir minha conta</h1>
           <Link
-            href="/perfil/editar"
-            className="text-xs bg-mural-dark px-2 py-1 border border-white retro-button-active hover:text-white"
+            href="/configuracoes"
+            className="text-xs bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
           >
-            [←] Voltar
+            ← Configurações
           </Link>
         </header>
 

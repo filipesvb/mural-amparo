@@ -28,9 +28,9 @@ export default async function EditarPerfilPage() {
           <h1 className="font-bold tracking-tight">👤 Seu Perfil em Amparo</h1>
           <Link
             href={voltarHref}
-            className="text-xs bg-mural-dark px-2 py-1 border border-white retro-button-active hover:text-white"
+            className="text-xs bg-mural-ink/30 hover:bg-mural-ink/50 text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
           >
-            [←] Voltar
+            ← Voltar
           </Link>
         </header>
 
@@ -41,30 +41,13 @@ export default async function EditarPerfilPage() {
 
           <ProfileForm profile={profile} />
 
-          <div className="pt-4 border-t-2 border-mural-dark/20 space-y-3">
-            <h2 className="text-xs font-bold uppercase text-mural-dark/70">
-              Privacidade & conta
-            </h2>
-            <a
-              href="/api/exportar-dados"
-              className="block w-full bg-mural-creme text-mural-dark p-2 text-center text-xs font-bold retro-border retro-button-active"
-              download
-            >
-              📥 Exportar meus dados (JSON)
-            </a>
+          <div className="pt-4 border-t-2 border-mural-dark/20 text-center">
             <Link
-              href="/perfil/excluir"
-              className="block w-full bg-red-50 text-red-900 p-2 text-center text-xs font-bold border-2 border-red-800 retro-button-active hover:bg-red-100"
+              href="/configuracoes"
+              className="text-xs underline text-mural-dark/70 hover:text-mural-dark"
             >
-              🗑️ Excluir minha conta
+              ⚙️ Configurações da conta (senha, e-mail, privacidade)
             </Link>
-            <p className="text-[10px] text-mural-dark/60 italic text-center">
-              Veja a{" "}
-              <Link href="/privacidade" className="underline">
-                Política de Privacidade
-              </Link>{" "}
-              pra detalhes.
-            </p>
           </div>
         </div>
 
