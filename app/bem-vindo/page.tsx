@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import OnboardingFlow from "@/components/OnboardingFlow";
 
 export const metadata = {
-  title: "Bem-vindo ao Mural Amparo",
+  title: "Bem-vindo",
 };
 
 // Sanitiza o prefixo do e-mail pra um nickname válido (regex de nicknameSchema:

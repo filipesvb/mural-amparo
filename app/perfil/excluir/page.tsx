@@ -4,7 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import DeleteAccountForm from "@/components/DeleteAccountForm";
 
 export const metadata = {
-  title: "Excluir conta · Mural Amparo",
+  title: "Excluir conta",
 };
 
 export default async function ExcluirContaPage() {

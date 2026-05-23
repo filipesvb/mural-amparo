@@ -32,6 +32,11 @@ import {
   type PostCategory,
 } from "@/utils/categories";
 import { fetchFollowingIds } from "@/utils/follows.server";
+import { fetchBlockedIds, blockedNotInFilter } from "@/utils/blocks.server";
+import {
+  moderatePostImages,
+  moderateAvatarImage,
+} from "@/utils/image-moderation.server";
 import { APP_UTC_OFFSET } from "@/utils/events";
 
 export type SearchProfileHit = {
@@ -141,6 +146,17 @@ export async function loadMorePosts(
 
   if (category) query = query.eq("category", category);
 
+  // Esconde posts de moradores que o usuário bloqueou. Sessão deslogada
+  // não tem bloqueios — pula a query.
+  const {
+    data: { user: feedUser },
+  } = await supabase.auth.getUser();
+  if (feedUser) {
+    const blockedIds = await fetchBlockedIds(feedUser.id);
+    const filter = blockedNotInFilter(blockedIds);
+    if (filter) query = query.not("user_id", "in", filter);
+  }
+
   const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(FEED_PAGE_SIZE);
@@ -219,6 +235,19 @@ export async function createPost(formData: FormData) {
     return {
       error: rateLimitMessage(RATE_LIMIT.post.label, postRate.retryAfterSec),
     };
+  }
+
+  // Moderação automática das imagens. Se qualquer uma bater num bloqueio
+  // duro (sexual/violência/automutilação), apaga TODOS os arquivos do post
+  // pra não deixar lixo no Storage e devolve erro pro usuário.
+  if (image_paths.length > 0) {
+    const mod = await moderatePostImages(image_paths);
+    if (!mod.ok) {
+      await supabase.storage.from(POST_IMAGES_BUCKET).remove(image_paths);
+      return {
+        error: `Sua imagem foi bloqueada pela moderação automática (${mod.reason}). Se acha que foi um engano, escreva pra contato@mural-amparo.com.br.`,
+      };
+    }
   }
 
   const { error } = await supabase.from("posts").insert([
@@ -793,6 +822,18 @@ export async function updateProfile(formData: FormData) {
     return { error: "Imagem inválida. Tente enviar novamente." };
   }
 
+  // Modera a nova foto (se houver). Se reprovar, apaga do Storage e
+  // devolve erro — não chega a sobrescrever o perfil.
+  if (newAvatarPath) {
+    const mod = await moderateAvatarImage(newAvatarPath);
+    if (!mod.ok) {
+      await supabase.storage.from(AVATARS_BUCKET).remove([newAvatarPath]);
+      return {
+        error: `Sua foto foi bloqueada pela moderação automática (${mod.reason}).`,
+      };
+    }
+  }
+
   // undefined = não mexe no avatar_path; null = remover; string = nova foto
   let avatar_path: string | null | undefined = undefined;
   if (newAvatarPath) {
@@ -1046,6 +1087,15 @@ export async function completeOnboarding(formData: FormData) {
   if (newAvatarPathRaw && !newAvatarPath) {
     return { error: "Imagem inválida. Tente enviar novamente." };
   }
+  if (newAvatarPath) {
+    const mod = await moderateAvatarImage(newAvatarPath);
+    if (!mod.ok) {
+      await supabase.storage.from(AVATARS_BUCKET).remove([newAvatarPath]);
+      return {
+        error: `Sua foto foi bloqueada pela moderação automática (${mod.reason}).`,
+      };
+    }
+  }
 
   const updatePayload: {
     nickname: string;
@@ -1281,4 +1331,177 @@ export async function deleteEvent(formData: FormData) {
 
   revalidatePath("/eventos");
   revalidatePath("/");
+}
+
+// ============================================================
+// Moderação distribuída — denúncia + bloqueio
+// ============================================================
+
+const REPORT_REASONS = [
+  "spam",
+  "assedio",
+  "discurso_odio",
+  "conteudo_sexual",
+  "violencia",
+  "desinformacao",
+  "outro",
+] as const;
+
+const reportSchema = z.object({
+  target_type: z.enum(["post", "comment"]),
+  target_id: z.coerce.number().int().positive(),
+  reason: z.enum(REPORT_REASONS),
+  details: z.string().trim().max(500).optional().or(z.literal("")),
+});
+
+export async function reportContent(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado" };
+
+  const parsed = reportSchema.safeParse({
+    target_type: formData.get("target_type"),
+    target_id: formData.get("target_id"),
+    reason: formData.get("reason"),
+    details: formData.get("details"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const { target_type, target_id, reason, details } = parsed.data;
+
+  const { error } = await supabase.from("reports").insert({
+    reporter_id: user.id,
+    target_type,
+    target_id,
+    reason,
+    details: details || null,
+  });
+
+  if (error) {
+    // Unique violation = já denunciou esse conteúdo. Resposta amigável.
+    if (error.code === "23505") {
+      return { error: "Você já denunciou este conteúdo." };
+    }
+    console.error("Erro ao criar denúncia:", error);
+    return { error: "Não foi possível enviar a denúncia." };
+  }
+
+  return {
+    info: "Denúncia recebida. Nosso time de moderação vai revisar em breve.",
+  };
+}
+
+// Staff resolve uma denúncia. 'hide' apaga o conteúdo denunciado E marca
+// como revisada; 'dismiss' só marca como falso positivo, sem apagar nada.
+export async function resolveReport(
+  reportId: number,
+  decision: "hide" | "dismiss",
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado" };
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (!canModerate(asRole(me?.role))) {
+    return { error: "Apenas moderação pode resolver denúncias." };
+  }
+
+  const { data: report } = await supabase
+    .from("reports")
+    .select("target_type, target_id, status")
+    .eq("id", reportId)
+    .single();
+  if (!report) return { error: "Denúncia não encontrada." };
+  if ((report as { status: string }).status !== "aberto") {
+    return { error: "Esta denúncia já foi resolvida." };
+  }
+
+  if (decision === "hide") {
+    const r = report as { target_type: string; target_id: number };
+    const { error: delError } =
+      r.target_type === "post"
+        ? await supabase.from("posts").delete().eq("id", r.target_id)
+        : await supabase.from("comments").delete().eq("id", r.target_id);
+    if (delError) {
+      console.error("Erro ao ocultar conteúdo denunciado:", delError);
+      return { error: "Não foi possível ocultar o conteúdo." };
+    }
+  }
+
+  const { error: updError } = await supabase
+    .from("reports")
+    .update({
+      status: decision === "hide" ? "revisado" : "rejeitado",
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", reportId);
+  if (updError) {
+    console.error("Erro ao atualizar denúncia:", updError);
+    return { error: "Não foi possível atualizar a denúncia." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/");
+  return { info: "Denúncia resolvida." };
+}
+
+// Bloqueio unilateral e silencioso — alvo não é notificado. Feed e
+// listagens passam a filtrar posts do bloqueado pra quem chamou.
+export async function blockUser(targetUserId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado" };
+  if (targetUserId === user.id) {
+    return { error: "Você não pode bloquear a si mesmo." };
+  }
+
+  const { error } = await supabase.from("blocks").insert({
+    blocker_id: user.id,
+    blocked_id: targetUserId,
+  });
+  if (error) {
+    // Já estava bloqueado — sucesso idempotente.
+    if (error.code === "23505") {
+      revalidatePath("/");
+      return { info: "Morador já estava bloqueado." };
+    }
+    console.error("Erro ao bloquear morador:", error);
+    return { error: "Não foi possível bloquear." };
+  }
+
+  revalidatePath("/");
+  return { info: "Morador bloqueado." };
+}
+
+export async function unblockUser(targetUserId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autorizado" };
+
+  const { error } = await supabase
+    .from("blocks")
+    .delete()
+    .eq("blocker_id", user.id)
+    .eq("blocked_id", targetUserId);
+  if (error) {
+    console.error("Erro ao desbloquear morador:", error);
+    return { error: "Não foi possível desbloquear." };
+  }
+
+  revalidatePath("/");
+  return { info: "Morador desbloqueado." };
 }

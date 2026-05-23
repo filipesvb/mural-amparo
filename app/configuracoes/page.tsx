@@ -6,7 +6,7 @@ import ChangePasswordForm from "@/components/ChangePasswordForm";
 import ChangeEmailForm from "@/components/ChangeEmailForm";
 
 export const metadata = {
-  title: "Configurações · Mural Amparo",
+  title: "Configurações",
 };
 
 export default async function ConfiguracoesPage() {

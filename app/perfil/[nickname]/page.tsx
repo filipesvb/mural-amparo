@@ -5,6 +5,7 @@ import PostCard from "@/components/PostCard";
 import Avatar from "@/components/Avatar";
 import RoleBadge from "@/components/RoleBadge";
 import FollowButton from "@/components/FollowButton";
+import BlockUserButton from "@/components/BlockUserButton";
 import NotificationBell from "@/components/NotificationBell";
 import SearchBar from "@/components/SearchBar";
 import { MentionsProvider } from "@/components/MentionsProvider";
@@ -96,14 +97,24 @@ export default async function PerfilPublicoPage({
     ]);
 
   let isFollowing = false;
+  let isBlocked = false;
   if (user && !isOwner) {
-    const { data: followRow } = await supabase
-      .from("follows")
-      .select("follower_id")
-      .eq("follower_id", user.id)
-      .eq("following_id", profile.id)
-      .maybeSingle();
-    isFollowing = !!followRow;
+    const [followRes, blockRes] = await Promise.all([
+      supabase
+        .from("follows")
+        .select("follower_id")
+        .eq("follower_id", user.id)
+        .eq("following_id", profile.id)
+        .maybeSingle(),
+      supabase
+        .from("blocks")
+        .select("blocker_id")
+        .eq("blocker_id", user.id)
+        .eq("blocked_id", profile.id)
+        .maybeSingle(),
+    ]);
+    isFollowing = !!followRes.data;
+    isBlocked = !!blockRes.data;
   }
 
   const memberSince = profile.created_at
@@ -222,10 +233,17 @@ export default async function PerfilPublicoPage({
             </Link>
           ) : (
             user && (
-              <FollowButton
-                targetUserId={profile.id}
-                initialIsFollowing={isFollowing}
-              />
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <FollowButton
+                  targetUserId={profile.id}
+                  initialIsFollowing={isFollowing}
+                />
+                <BlockUserButton
+                  targetUserId={profile.id}
+                  targetNickname={profile.nickname}
+                  initialIsBlocked={isBlocked}
+                />
+              </div>
             )
           )}
         </section>

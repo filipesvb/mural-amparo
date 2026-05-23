@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { fetchFollowingIds } from "@/utils/follows.server";
+import { fetchBlockedIds, blockedNotInFilter } from "@/utils/blocks.server";
 import { fetchTrendingHashtags } from "@/utils/hashtags.server";
 import { FEED_PAGE_SIZE } from "@/utils/feed";
 import { fetchInitialNotifications } from "@/utils/notifications";
@@ -45,22 +46,29 @@ export default async function Home({
   const followingIds = user ? await fetchFollowingIds(user.id) : null;
   const followingSet = followingIds ? new Set(followingIds) : null;
 
+  // Lista de bloqueados pra esconder posts dessas pessoas do feed.
+  const blockedIds = user ? await fetchBlockedIds(user.id) : [];
+  const blockedFilter = blockedNotInFilter(blockedIds);
+
   // Feed sempre público e sem filtro de categoria — o RealtimeFeed filtra
   // em memória conforme o usuário troca de chip/escopo.
+  let feedQuery = supabase
+    .from("posts")
+    .select(
+      `
+      *,
+      profiles (nickname, avatar_seed, avatar_path, role),
+      reactions (user_id, emoji),
+      comments (*),
+      bookmarks (user_id)
+    `,
+    )
+    .order("created_at", { ascending: false })
+    .limit(FEED_PAGE_SIZE);
+  if (blockedFilter) feedQuery = feedQuery.not("user_id", "in", blockedFilter);
+
   const [res, countRes] = await Promise.all([
-    supabase
-      .from("posts")
-      .select(
-        `
-        *,
-        profiles (nickname, avatar_seed, avatar_path, role),
-        reactions (user_id, emoji),
-        comments (*),
-        bookmarks (user_id)
-      `,
-      )
-      .order("created_at", { ascending: false })
-      .limit(FEED_PAGE_SIZE),
+    feedQuery,
     supabase.from("posts").select("category, user_id"),
   ]);
 

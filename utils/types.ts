@@ -105,3 +105,48 @@ export type CityEvent = {
 export type CityEventWithAuthor = CityEvent & {
   suggester: Pick<Profile, "nickname" | "avatar_seed" | "avatar_path"> | null;
 };
+
+// Denúncia de conteúdo. Motivos finitos pra padronizar o triagem no /admin.
+export type ReportTargetType = "post" | "comment";
+
+export type ReportReason =
+  | "spam"
+  | "assedio"
+  | "discurso_odio"
+  | "conteudo_sexual"
+  | "violencia"
+  | "desinformacao"
+  | "outro";
+
+export type ReportStatus = "aberto" | "revisado" | "rejeitado";
+
+export type Report = {
+  id: number;
+  reporter_id: string;
+  target_type: ReportTargetType;
+  target_id: number;
+  reason: ReportReason;
+  details: string | null;
+  status: ReportStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+};
+
+// Bloqueio unilateral. Linha só lida pelo bloqueador (RLS).
+export type Block = {
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+};
+
+// Rótulos pt-BR pros motivos de denúncia (UI).
+export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
+  spam: "Spam ou propaganda",
+  assedio: "Assédio ou ofensa pessoal",
+  discurso_odio: "Discurso de ódio ou discriminação",
+  conteudo_sexual: "Conteúdo sexual ou impróprio",
+  violencia: "Violência ou ameaça",
+  desinformacao: "Desinformação",
+  outro: "Outro",
+};

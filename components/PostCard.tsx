@@ -14,6 +14,7 @@ import Avatar from "./Avatar";
 import PostGallery from "./PostGallery";
 import ImageLightbox from "./ImageLightbox";
 import RoleBadge from "./RoleBadge";
+import ReportDialog from "./ReportDialog";
 import { PostInteractions } from "./Interactions";
 import { RenderWithMentions } from "./MentionsProvider";
 import MentionInput from "./MentionInput";
@@ -40,6 +41,7 @@ export default function PostCard({
   const [editError, setEditError] = useState("");
   const [isSaving, startSaveTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
+  const [isReporting, setIsReporting] = useState(false);
 
   const displayName = post.profiles?.nickname || post.author_name;
 
@@ -58,6 +60,9 @@ export default function PostCard({
   // Staff (moderador/admin) pode apagar recado de qualquer um.
   const canMod = !!user && canModerate(viewerRole);
   const canDelete = isOwner || canMod;
+  // Denunciar aparece pra logado que não é dono (staff pode apagar direto,
+  // mas também pode denunciar pra deixar trilha no histórico).
+  const canReport = !!user && !isOwner;
   const createdAtMs = new Date(post.created_at).getTime();
   const [withinEditWindow, setWithinEditWindow] = useState(
     () => Date.now() - createdAtMs < EDIT_WINDOW_MS,
@@ -146,27 +151,36 @@ export default function PostCard({
           </div>
         </div>
 
-        {canDelete && !isEditing && (
+        {!isEditing && (canDelete || canReport) && (
           <div className="flex gap-1 text-[10px] font-bold shrink-0">
             {isOwner && withinEditWindow && (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-2 py-1 rounded-lg text-mural-ink/60 hover:bg-mural-creme"
+                className="px-2 py-1 rounded-lg text-mural-ink/60 hover:bg-mural-creme cursor-pointer transition-colors"
                 disabled={isDeleting}
               >
                 ✏️ Editar
               </button>
             )}
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              title={
-                isOwner ? "Excluir recado" : "Excluir como moderador"
-              }
-              className="px-2 py-1 rounded-lg text-red-700 hover:bg-red-50 disabled:opacity-50"
-            >
-              {isDeleting ? "..." : "🗑️"}
-            </button>
+            {canReport && (
+              <button
+                onClick={() => setIsReporting(true)}
+                title="Denunciar recado"
+                className="px-2 py-1 rounded-lg text-mural-ink/60 hover:bg-mural-creme cursor-pointer transition-colors"
+              >
+                🚩
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                title={isOwner ? "Excluir recado" : "Excluir como moderador"}
+                className="px-2 py-1 rounded-lg text-red-700 hover:bg-red-50 cursor-pointer transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? "..." : "🗑️"}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -247,6 +261,14 @@ export default function PostCard({
         }
         onReactionChange={onReactionChange}
       />
+
+      {isReporting && (
+        <ReportDialog
+          targetType="post"
+          targetId={post.id}
+          onClose={() => setIsReporting(false)}
+        />
+      )}
     </article>
   );
 }

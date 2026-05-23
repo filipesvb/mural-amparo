@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Termos de Uso · Mural Amparo",
+  title: "Termos de Uso",
 };
 
 const UPDATED_AT = "22 de maio de 2026";

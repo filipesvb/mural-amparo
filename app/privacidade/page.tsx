@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Política de Privacidade · Mural Amparo",
+  title: "Política de Privacidade",
 };
 
 const UPDATED_AT = "22 de maio de 2026";
