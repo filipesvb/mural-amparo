@@ -572,11 +572,37 @@ export async function editPost(formData: FormData) {
   const postId = Number(formData.get("post_id"));
   const content = (formData.get("content") as string)?.trim();
   if (!postId) return { error: "Recado inválido." };
-  if (!content) return { error: "O recado não pode estar vazio." };
+
+  // image_paths é multi-valued — pode ser uma lista (galeria editada),
+  // vazio (todas removidas), ou ausente (request legado sem mexer em foto).
+  const imagePathsRaw = formData.getAll("image_paths");
+  const hasImageField = formData.has("image_paths_present");
+  const newImagePaths = hasImageField
+    ? ownedImagePaths(imagePathsRaw, user.id)
+    : null; // null = não tocar nas imagens
+  if (hasImageField && newImagePaths === null) {
+    return { error: "Imagem inválida. Tente enviar novamente." };
+  }
+
+  if (!content && (!hasImageField || newImagePaths?.length === 0)) {
+    // Sem texto e (sem foto ou foto explicitamente removida) — bloqueia.
+    // Buscamos o estado atual pra confirmar que não sobrou imagem antiga.
+    const { data: existing } = await supabase
+      .from("posts")
+      .select("image_paths")
+      .eq("id", postId)
+      .single();
+    const remaining = hasImageField
+      ? (newImagePaths ?? [])
+      : ((existing?.image_paths ?? []) as string[]);
+    if (remaining.length === 0) {
+      return { error: "O recado precisa de texto ou imagem." };
+    }
+  }
 
   const { data: post } = await supabase
     .from("posts")
-    .select("user_id, created_at")
+    .select("user_id, created_at, image_paths")
     .eq("id", postId)
     .single();
   if (!post) return { error: "Recado não encontrado." };
@@ -585,13 +611,42 @@ export async function editPost(formData: FormData) {
   if (Date.now() - new Date(post.created_at).getTime() > EDIT_WINDOW_MS)
     return { error: "Janela de edição expirou (5 minutos)." };
 
+  // Diff entre o que estava no post e o que vem na edição. Só os adicionados
+  // passam por moderação (os antigos já passaram quando subiram).
+  const currentPaths = (post.image_paths ?? []) as string[];
+  const finalPaths = hasImageField ? (newImagePaths ?? []) : currentPaths;
+  const currentSet = new Set(currentPaths);
+  const finalSet = new Set(finalPaths);
+  const added = finalPaths.filter((p) => !currentSet.has(p));
+  const removed = currentPaths.filter((p) => !finalSet.has(p));
+
+  if (added.length > 0) {
+    const mod = await moderatePostImages(added);
+    if (!mod.ok) {
+      await supabase.storage.from(POST_IMAGES_BUCKET).remove(added);
+      return {
+        error: `Sua imagem foi bloqueada pela moderação automática (${mod.reason}).`,
+      };
+    }
+  }
+
+  const updatePayload: { content: string; image_paths?: string[] } = {
+    content,
+  };
+  if (hasImageField) updatePayload.image_paths = finalPaths;
+
   const { error } = await supabase
     .from("posts")
-    .update({ content })
+    .update(updatePayload)
     .eq("id", postId);
   if (error) {
     console.error("Erro ao editar recado:", error);
     return { error: "Não foi possível salvar a edição." };
+  }
+
+  // Limpa do Storage as imagens que foram desanexadas (best-effort).
+  if (removed.length > 0) {
+    await supabase.storage.from(POST_IMAGES_BUCKET).remove(removed);
   }
 
   revalidatePath("/");

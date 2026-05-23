@@ -1,11 +1,19 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { PostWithRelations } from "@/utils/types";
 import { EDIT_WINDOW_MS } from "@/utils/feed";
-import { postImageUrl } from "@/utils/storage";
+import {
+  ALLOWED_POST_IMAGE_TYPES,
+  MAX_POST_IMAGE_BYTES,
+  MAX_POST_IMAGES,
+  POST_IMAGES_BUCKET,
+  postImageUrl,
+} from "@/utils/storage";
+import { uploadImages, removeImages } from "@/utils/upload.client";
 import { categoryMeta } from "@/utils/categories";
 import type { ReactionEmoji } from "@/utils/reactions";
 import { canModerate, type Role } from "@/utils/roles";
@@ -42,6 +50,12 @@ export default function PostCard({
   const [isSaving, startSaveTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
   const [isReporting, setIsReporting] = useState(false);
+  // Estado da edição de galeria: paths antigos mantidos + arquivos novos
+  // staged pra upload. Vira o `image_paths` final ao salvar.
+  const [editedKeptPaths, setEditedKeptPaths] = useState<string[]>([]);
+  const [editedNewFiles, setEditedNewFiles] = useState<File[]>([]);
+  const [editedNewPreviews, setEditedNewPreviews] = useState<string[]>([]);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   const displayName = post.profiles?.nickname || post.author_name;
 
@@ -88,15 +102,108 @@ export default function PostCard({
     </div>
   );
 
+  function enterEditMode() {
+    setEditedKeptPaths(imagePaths);
+    setEditedNewFiles([]);
+    setEditedNewPreviews([]);
+    setEditError("");
+    setIsEditing(true);
+  }
+
+  function exitEditMode() {
+    // Revoga object URLs pra não vazar memória.
+    editedNewPreviews.forEach((u) => URL.revokeObjectURL(u));
+    setEditedKeptPaths([]);
+    setEditedNewFiles([]);
+    setEditedNewPreviews([]);
+    setEditError("");
+    setIsEditing(false);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  }
+
+  function removeKeptImage(path: string) {
+    setEditedKeptPaths((prev) => prev.filter((p) => p !== path));
+  }
+
+  function removeNewImage(index: number) {
+    URL.revokeObjectURL(editedNewPreviews[index]);
+    setEditedNewFiles((prev) => prev.filter((_, i) => i !== index));
+    setEditedNewPreviews((prev) => prev.filter((_, i) => i !== index));
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  }
+
+  function handleAddImages(e: React.ChangeEvent<HTMLInputElement>) {
+    setEditError("");
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      if (!(ALLOWED_POST_IMAGE_TYPES as readonly string[]).includes(file.type)) {
+        setEditError("Formato inválido. Use JPG, PNG, WebP ou GIF.");
+        if (editFileInputRef.current) editFileInputRef.current.value = "";
+        return;
+      }
+      if (file.size > MAX_POST_IMAGE_BYTES) {
+        setEditError("Imagem muito grande. O limite é 5 MB.");
+        if (editFileInputRef.current) editFileInputRef.current.value = "";
+        return;
+      }
+    }
+
+    const totalAfter =
+      editedKeptPaths.length + editedNewFiles.length + files.length;
+    if (totalAfter > MAX_POST_IMAGES) {
+      setEditError(`Máximo de ${MAX_POST_IMAGES} imagens por recado.`);
+      if (editFileInputRef.current) editFileInputRef.current.value = "";
+      return;
+    }
+
+    const newPreviews = files.map((f) => URL.createObjectURL(f));
+    setEditedNewFiles((prev) => [...prev, ...files]);
+    setEditedNewPreviews((prev) => [...prev, ...newPreviews]);
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
+  }
+
   async function handleEditSubmit(formData: FormData) {
     setEditError("");
     startSaveTransition(async () => {
+      let uploadedPaths: string[] = [];
+
+      // Sobe as imagens novas primeiro (mesmo padrão da criação de post).
+      if (editedNewFiles.length > 0 && user) {
+        const up = await uploadImages(
+          POST_IMAGES_BUCKET,
+          user.id,
+          editedNewFiles,
+        );
+        if ("error" in up) {
+          setEditError(up.error);
+          return;
+        }
+        uploadedPaths = up.paths;
+      }
+
+      // Marca que estamos enviando o campo de imagens (mesmo que vazio,
+      // pra a action saber que o usuário tocou na galeria).
+      formData.set("image_paths_present", "1");
+      formData.delete("image_paths");
+      for (const path of editedKeptPaths) {
+        formData.append("image_paths", path);
+      }
+      for (const path of uploadedPaths) {
+        formData.append("image_paths", path);
+      }
+
       const result = await editPost(formData);
       if (result?.error) {
+        // Limpa o que subiu agora — a action não vai persistir nada.
+        if (uploadedPaths.length > 0) {
+          await removeImages(POST_IMAGES_BUCKET, uploadedPaths);
+        }
         setEditError(result.error);
         return;
       }
-      setIsEditing(false);
+      exitEditMode();
     });
   }
 
@@ -155,7 +262,7 @@ export default function PostCard({
           <div className="flex gap-1 text-[10px] font-bold shrink-0">
             {isOwner && withinEditWindow && (
               <button
-                onClick={() => setIsEditing(true)}
+                onClick={enterEditMode}
                 className="px-2 py-1 rounded-lg text-mural-ink/60 hover:bg-mural-creme cursor-pointer transition-colors"
                 disabled={isDeleting}
               >
@@ -186,16 +293,89 @@ export default function PostCard({
       </div>
 
       {isEditing ? (
-        <form action={handleEditSubmit} className="mb-4 space-y-2">
+        <form action={handleEditSubmit} className="mb-4 space-y-3">
           <input type="hidden" name="post_id" value={post.id} />
           <MentionInput
             as="textarea"
             name="content"
             defaultValue={post.content}
-            required
             rows={3}
             className="w-full p-2 bg-mural-creme border border-mural-line rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-mural-brown/30"
           />
+
+          {(editedKeptPaths.length > 0 || editedNewPreviews.length > 0) && (
+            <div className="flex flex-wrap gap-2">
+              {editedKeptPaths.map((path) => (
+                <div
+                  key={path}
+                  className="relative w-16 h-16 rounded-lg overflow-hidden ring-1 ring-mural-line"
+                >
+                  <Image
+                    src={postImageUrl(path)}
+                    alt="Imagem do recado"
+                    width={64}
+                    height={64}
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeKeptImage(path)}
+                    disabled={isSaving}
+                    title="Remover imagem"
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-700 text-white rounded-full text-[10px] font-bold leading-none flex items-center justify-center cursor-pointer hover:bg-red-800 transition-colors disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {editedNewPreviews.map((url, i) => (
+                <div
+                  key={url}
+                  className="relative w-16 h-16 rounded-lg overflow-hidden ring-1 ring-mural-brown"
+                >
+                  <Image
+                    src={url}
+                    alt="Nova imagem"
+                    width={64}
+                    height={64}
+                    unoptimized
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeNewImage(i)}
+                    disabled={isSaving}
+                    title="Remover imagem"
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-700 text-white rounded-full text-[10px] font-bold leading-none flex items-center justify-center cursor-pointer hover:bg-red-800 transition-colors disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {editedKeptPaths.length + editedNewFiles.length < MAX_POST_IMAGES && (
+            <div>
+              <label className="text-[11px] font-bold text-mural-ink/60 cursor-pointer hover:text-mural-ink transition-colors">
+                📷 Adicionar imagem
+                <input
+                  ref={editFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  onChange={handleAddImages}
+                  disabled={isSaving}
+                  className="hidden"
+                />
+              </label>
+              <span className="text-[10px] text-mural-ink/45 ml-2">
+                até {MAX_POST_IMAGES - editedKeptPaths.length - editedNewFiles.length}{" "}
+                restantes · 5 MB cada
+              </span>
+            </div>
+          )}
+
           {editError && (
             <div className="bg-red-100 border border-red-300 rounded-lg p-3 text-red-800 text-sm font-bold">
               ⚠️ {editError}
@@ -211,12 +391,9 @@ export default function PostCard({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setIsEditing(false);
-                setEditError("");
-              }}
+              onClick={exitEditMode}
               disabled={isSaving}
-              className="bg-mural-creme border border-mural-line px-4 py-1.5 rounded-lg"
+              className="bg-mural-creme border border-mural-line px-4 py-1.5 rounded-lg cursor-pointer hover:brightness-105 transition-all"
             >
               Cancelar
             </button>
@@ -230,7 +407,7 @@ export default function PostCard({
         )
       )}
 
-      {imagePaths.length > 0 && (
+      {!isEditing && imagePaths.length > 0 && (
         <>
           <PostGallery
             paths={imagePaths}
@@ -248,6 +425,8 @@ export default function PostCard({
 
       <PostInteractions
         postId={post.id}
+        postContent={post.content}
+        postAuthorName={displayName}
         reactions={post.reactions || []}
         comments={post.comments || []}
         isLoggedIn={!!user}

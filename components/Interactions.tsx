@@ -17,6 +17,7 @@ import { EDIT_WINDOW_MS } from "@/utils/feed";
 import { RenderWithMentions } from "./MentionsProvider";
 import MentionInput from "./MentionInput";
 import HoneypotField from "./HoneypotField";
+import SharePostButton from "./SharePostButton";
 
 // Comentário temporário (id negativo evita colisão de key) exibido na hora;
 // é descartado quando o comentário real chega via Realtime.
@@ -39,6 +40,8 @@ function makeOptimisticComment(
 
 export function PostInteractions({
   postId,
+  postContent,
+  postAuthorName,
   reactions,
   comments,
   isLoggedIn,
@@ -49,6 +52,8 @@ export function PostInteractions({
   onReactionChange,
 }: {
   postId: number;
+  postContent: string;
+  postAuthorName: string;
   reactions: Pick<Reaction, "user_id" | "emoji">[];
   comments: Comment[];
   isLoggedIn: boolean;
@@ -164,7 +169,7 @@ export function PostInteractions({
 
           <button
             onClick={() => setShowComments(!showComments)}
-            className="text-mural-ink/50 hover:text-mural-ink flex items-center gap-1 px-2 py-1 text-[11px] md:text-xs"
+            className="text-mural-ink/50 hover:text-mural-ink flex items-center gap-1 px-2 py-1 text-[11px] md:text-xs cursor-pointer transition-colors"
           >
             <span className="text-sm md:text-base">💬</span>
             <span className="hidden sm:inline">
@@ -173,6 +178,12 @@ export function PostInteractions({
             </span>
             <span className="sm:hidden">{optimisticComments.length}</span>
           </button>
+
+          <SharePostButton
+            postId={postId}
+            content={postContent}
+            authorName={postAuthorName}
+          />
         </div>
       </div>
 
