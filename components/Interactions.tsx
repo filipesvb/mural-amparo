@@ -8,7 +8,7 @@ import {
   toggleBookmark,
 } from "@/app/actions";
 import { useRouter } from "next/navigation";
-import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
 import type { Comment, Reaction } from "@/utils/types";
 import type { ReactionEmoji } from "@/utils/reactions";
 import { REACTION_EMOJIS } from "@/utils/reactions";
@@ -18,6 +18,7 @@ import { RenderWithMentions } from "./MentionsProvider";
 import MentionInput from "./MentionInput";
 import HoneypotField from "./HoneypotField";
 import SharePostButton from "./SharePostButton";
+import { BookmarkIcon, MessageCircleIcon } from "./icons";
 
 // Comentário temporário (id negativo evita colisão de key) exibido na hora;
 // é descartado quando o comentário real chega via Realtime.
@@ -101,6 +102,26 @@ export function PostInteractions({
     (state: Comment[], c: Comment) => [...state, c],
   );
 
+  // Dedupe: quando o Realtime entrega o comentário real (id > 0) antes da
+  // transition do form fechar, ele coexiste com o optimistic ("Você", id < 0)
+  // por alguns ms — gerando o flash de duplicata. Removemos o optimistic se
+  // existir um real com mesmo autor/conteúdo/parent.
+  const displayComments = useMemo(() => {
+    const realKeys = new Set<string>();
+    for (const c of optimisticComments) {
+      if (c.id > 0) {
+        realKeys.add(
+          `${c.user_id}::${c.content}::${c.parent_comment_id ?? "top"}`,
+        );
+      }
+    }
+    return optimisticComments.filter((c) => {
+      if (c.id > 0) return true;
+      const key = `${c.user_id}::${c.content}::${c.parent_comment_id ?? "top"}`;
+      return !realKeys.has(key);
+    });
+  }, [optimisticComments]);
+
   const myReaction = currentUserId
     ? (reactions.find((r) => r.user_id === currentUserId)?.emoji ?? null)
     : null;
@@ -108,8 +129,8 @@ export function PostInteractions({
 
   return (
     <div className="mt-4 pt-3 border-t border-mural-line">
-      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-1.5 text-xs font-bold">
-        <div className="flex flex-wrap gap-1 md:gap-1.5 items-center">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-bold">
+        <div className="flex flex-wrap gap-1.5 items-center">
           {REACTION_EMOJIS.map((emoji) => {
             const count = reactions.filter((r) => r.emoji === emoji).length;
             const mine = myReaction === emoji;
@@ -131,23 +152,24 @@ export function PostInteractions({
                       : "Reagir"
                     : "Entre para reagir"
                 }
-                className={`flex items-center gap-1 rounded-full border px-2 md:px-2.5 py-1 transition-colors text-[11px] md:text-xs ${
+                className={`flex items-center gap-1 rounded-full border px-2.5 h-8 transition-colors text-[11px] md:text-xs whitespace-nowrap cursor-pointer disabled:cursor-not-allowed ${
                   mine
                     ? "bg-mural-brown/15 border-mural-brown text-mural-ink"
                     : "bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme"
                 }`}
               >
-                <span className="text-sm md:text-base">{emoji}</span>
-                {count > 0 && <span className="hidden sm:inline">{count}</span>}
+                <span className="text-base leading-none">{emoji}</span>
+                {count > 0 && <span>{count}</span>}
               </button>
             );
           })}
         </div>
 
-        <div className="md:ml-auto flex items-center gap-2 md:gap-1">
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button
             onClick={handleBookmark}
             disabled={!isLoggedIn}
+            aria-label={isBookmarked ? "Remover dos salvos" : "Salvar recado"}
             title={
               isLoggedIn
                 ? isBookmarked
@@ -155,28 +177,33 @@ export function PostInteractions({
                   : "Salvar recado"
                 : "Entre para salvar"
             }
-            className={`flex items-center gap-1 rounded-full border px-2 md:px-2.5 py-1 transition-colors text-[11px] md:text-xs ${
+            className={`flex items-center justify-center rounded-full border w-8 h-8 transition-colors cursor-pointer disabled:cursor-not-allowed ${
               isBookmarked
-                ? "bg-mural-brown/15 border-mural-brown text-mural-ink"
-                : "bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme"
+                ? "bg-mural-brown/15 border-mural-brown text-mural-brown"
+                : "bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme hover:text-mural-ink"
             }`}
           >
-            <span className="text-sm md:text-base">🔖</span>
-            <span className="hidden sm:inline">
-              {isBookmarked ? "Salvo" : "Salvar"}
-            </span>
+            <BookmarkIcon filled={isBookmarked} size={16} />
           </button>
 
           <button
             onClick={() => setShowComments(!showComments)}
-            className="text-mural-ink/50 hover:text-mural-ink flex items-center gap-1 px-2 py-1 text-[11px] md:text-xs cursor-pointer transition-colors"
+            aria-label={
+              displayComments.length === 1
+                ? "1 comentário"
+                : `${displayComments.length} comentários`
+            }
+            title={
+              displayComments.length === 1
+                ? "1 comentário"
+                : `${displayComments.length} comentários`
+            }
+            className="flex items-center gap-1.5 rounded-full border bg-mural-card border-mural-line text-mural-ink/55 hover:bg-mural-creme hover:text-mural-ink transition-colors px-2.5 h-8 text-[11px] md:text-xs whitespace-nowrap cursor-pointer"
           >
-            <span className="text-sm md:text-base">💬</span>
-            <span className="hidden sm:inline">
-              {optimisticComments.length}{" "}
-              {optimisticComments.length === 1 ? "comentário" : "comentários"}
-            </span>
-            <span className="sm:hidden">{optimisticComments.length}</span>
+            <MessageCircleIcon size={16} />
+            {displayComments.length > 0 && (
+              <span>{displayComments.length}</span>
+            )}
           </button>
 
           <SharePostButton
@@ -190,11 +217,11 @@ export function PostInteractions({
       {showComments && (
         <div className="mt-4 space-y-3 bg-mural-creme/40 p-3 rounded-xl border border-mural-line">
           {(() => {
-            const topLevel = optimisticComments.filter(
+            const topLevel = displayComments.filter(
               (c) => c.parent_comment_id == null,
             );
             const repliesByParent = new Map<number, Comment[]>();
-            for (const c of optimisticComments) {
+            for (const c of displayComments) {
               if (c.parent_comment_id == null) continue;
               const list = repliesByParent.get(c.parent_comment_id) ?? [];
               list.push(c);

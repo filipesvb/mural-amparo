@@ -1,5 +1,7 @@
 "use client";
 
+import { ShareIcon } from "./icons";
+
 // Compartilhar recado via WhatsApp. Em mobile abre o app; no desktop, o
 // WhatsApp Web. Não precisa de login pra compartilhar — qualquer um vendo
 // o feed público pode mandar pra um amigo. Driver de crescimento orgânico
@@ -35,11 +37,11 @@ export default function SharePostButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      aria-label="Compartilhar no WhatsApp"
       title="Compartilhar no WhatsApp"
-      className="flex items-center gap-1 rounded-full border bg-mural-card border-mural-line text-mural-ink/55 hover:bg-green-50 hover:border-green-600 hover:text-green-700 transition-colors px-2 md:px-2.5 py-1 text-[11px] md:text-xs cursor-pointer"
+      className="flex items-center justify-center rounded-full border bg-mural-card border-mural-line text-mural-ink/55 hover:bg-green-50 hover:border-green-600 hover:text-green-700 transition-colors w-8 h-8 cursor-pointer"
     >
-      <span className="text-sm md:text-base">📲</span>
-      <span className="hidden sm:inline">Compartilhar</span>
+      <ShareIcon size={16} />
     </a>
   );
 }
