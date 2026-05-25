@@ -75,7 +75,7 @@ export default function SidebarNav({
         Configurações
       </Link>
       <Link
-        href="#"
+        href="/links-uteis"
         className={`${baseClass} ${idleClass}`}
         onClick={onSelect}
       >
